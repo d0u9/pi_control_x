@@ -13,3 +13,7 @@ name = "server_lib"
 path = "src/lib.rs"
 
 [dependencies]
+tokio = { version = "^1.14.0", features = ["macros", "rt"] }
+tokio-udev = "^0.7.0"
+futures-util = "^0.3.18"
+
