@@ -1,52 +1,50 @@
 #[cfg(test)]
 mod mod_test;
 
-use crate::result::Result;
-use std::ffi::OsStr;
+pub(crate) mod udev;
+pub(crate) use self::udev::Udev;
 
-use futures_util::future::ready;
-use futures_util::stream::StreamExt;
-use tokio_udev::{AsyncMonitorSocket, MonitorBuilder};
+pub(crate) mod event;
+pub(crate) use self::event::Event;
 
-struct Udev {
-    monitor: AsyncMonitorSocket,
+use ::std::ffi::{OsStr, OsString};
+use ::tokio::sync::broadcast;
+use crate::result::{Result, Error};
+
+struct ThreadUdev {
+    matcher: Vec<(OsString, OsString)>,
 }
 
-impl Udev {
-    fn new<T, U>(subsystem: T, devtype: U) -> Result<Self>
+impl ThreadUdev {
+    pub fn new() -> Result<ThreadUdev> {
+        Ok(ThreadUdev{
+            matcher: Vec::new(),
+        })
+    }
+
+    pub fn match_subsystem_devtype<T, U>(mut self, subsystem: T, devtype: U) -> Result<Self>
     where
         T: AsRef<OsStr>,
         U: AsRef<OsStr>,
     {
-        let builder = MonitorBuilder::new()
-            .expect("Cannot create monitor builder")
-            .match_subsystem_devtype(&subsystem, devtype)
-            .expect("xx");
-        let builder = builder
-            .match_subsystem_devtype(&subsystem, "disk")
-            .expect("Filed to add filter");
-
-		let monitor: AsyncMonitorSocket = builder
-			.listen()
-			.expect("Couldn't create MonitorSocket")
-			.try_into()
-			.expect("Couldn't create AsyncMonitorSocket");
-
-        Ok(Udev { monitor })
+        self.matcher.push((subsystem.as_ref().to_os_string(), devtype.as_ref().to_os_string()));
+        Ok(self)
     }
 
-    async fn listen(self) {
-        self.monitor
-        	.for_each(|event| {
-        		if let Ok(event) = event {
-        			println!(
-        				"Hotplug event: {}: {}",
-        				event.event_type(),
-        				event.device().syspath().display(),
-        				);
-        		}
-        		ready(())
-        	})
-        .await;
+    fn spawn_run(self) -> Result<broadcast::Receiver<Event>> {
+        let (tx, rx) = broadcast::channel(16);
+
+        tokio::spawn(async move {
+            let matcher = self.matcher;
+            let mut udev = Udev::new().unwrap();
+
+            for mat in matcher.into_iter() {
+                udev = udev.match_subsystem_devtype(mat.0, mat.1).unwrap();
+            }
+
+            udev.listen(tx);
+        });
+
+        Ok(rx)
     }
 }

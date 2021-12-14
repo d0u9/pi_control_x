@@ -1,6 +1,8 @@
 use std::error;
 use std::fmt;
 use std::result;
+use std::convert::From;
+use std::io;
 
 pub type Result<T> = result::Result<T, Error>;
 
@@ -14,3 +16,9 @@ impl fmt::Display for Error {
 }
 
 impl error::Error for Error {}
+
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Self {
+        Error{}
+    }
+}
