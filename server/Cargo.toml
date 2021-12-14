@@ -13,7 +13,7 @@ name = "server_lib"
 path = "src/lib.rs"
 
 [dependencies]
-tokio = { version = "^1.14.0", features = ["macros", "rt", "sync"] }
+tokio = { version = "^1.14.0", features = ["macros", "rt", "sync", "net"] }
 udev = { version = "^0.6.2", features = ["mio"] }
 libc = "0.2"
 mio = { version = "^0.7", features = ["os-ext"] }

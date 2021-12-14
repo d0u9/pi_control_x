@@ -1,10 +1,12 @@
 use ::std::ffi::OsStr;
-use ::udev::MonitorBuilder;
+use ::udev::{MonitorBuilder, MonitorSocket};
 use ::tokio::sync::broadcast;
-use ::mio::{Events, Interest, Poll, Token};
+use ::tokio::io::unix::AsyncFd;
+use ::tokio::io::Interest;
+// use ::mio::{Events, Interest, Poll, Token};
 
 use crate::result::Result;
-use super::event::Event;
+use super::event::{Event, Events};
 
 pub(crate) struct Udev {
     builder: MonitorBuilder,
@@ -28,33 +30,36 @@ impl Udev {
         Ok( Udev{ builder } )
     }
 
-    pub fn listen(self, tx: broadcast::Sender<Event>) -> Result<()> {
-        let mut socket = self.builder.listen().unwrap();
+    pub fn listen(self) -> Result<UdevSocket> {
+        let mut socket = self.builder.listen()?;
+        let mut socket = AsyncFd::with_interest(socket, Interest::READABLE)?;
+        Ok(UdevSocket{ inner: socket })
 
-        let mut poll = Poll::new()?;
-        let mut events = Events::with_capacity(1024);
-
-        poll.registry().register(
-            &mut socket,
-            Token(0),
-            Interest::READABLE | Interest::WRITABLE,
-        )?;
-
-        loop {
-            poll.poll(&mut events, None)?;
-
-            for event in &events {
-                if event.token() == Token(0) && event.is_writable() {
-                    socket.clone().for_each(|x| print_event(x));
-                }
-            }
-        }
-
-        // Ok(())
     }
 }
 
-fn print_event(event: udev::Event) {
+pub(crate) struct UdevSocket {
+    inner: AsyncFd<MonitorSocket>,
+}
+
+impl UdevSocket {
+    pub async fn read(&mut self) -> Result<Vec<Event>> {
+        loop {
+            let mut guard = self.inner.readable().await?;
+            guard.clear_ready();
+
+            let socket = self.inner.get_ref().clone();
+            let events = socket.map(|x| x.into()).collect::<Vec<_>>();
+            if events.len() > 0 {
+                return Ok(events);
+            } else {
+                continue;
+            }
+        }
+    }
+}
+
+fn print_event(event: &udev::Event) {
     println!(
         "{}: {} {} (subsystem={}, sysname={}, devtype={})",
         event.sequence_number(),
