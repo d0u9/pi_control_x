@@ -1,6 +1,6 @@
 #[cfg(test)]
-use ::tokio::sync::broadcast;
 use super::udev::UdevMonitor;
+use crate::Shutdown;
 
 #[tokio::test]
 async fn udev_test() {
@@ -12,14 +12,12 @@ async fn udev_test() {
         .unwrap()
         ;
 
-    println!("--------");
     loop {
         let events = socket.read()
             .await
             .unwrap()
             .into_iter()
             .for_each(|x| println!("{:?}", x));
-        println!("?????");
     }
 }
 
@@ -27,7 +25,7 @@ use super::UdevPoller;
 
 #[tokio::test]
 async fn udev_poll_test() {
-    let mut socket = UdevMonitor::new()
+    let socket = UdevMonitor::new()
         .expect("Cannot create udev")
         .match_subsystem_devtype("block", "disk")
         .expect("Cannot add subsystem")
@@ -35,6 +33,10 @@ async fn udev_poll_test() {
         .unwrap()
         ;
 
+    let (send, recv) = Shutdown::new();
     let poller = UdevPoller::new(socket);
-    poller.spawn();
+    let handler = poller.spawn(recv);
+    ::tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+    send.shutdown();
+    handler.await.unwrap();
 }

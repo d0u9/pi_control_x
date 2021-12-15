@@ -17,8 +17,9 @@ impl fmt::Display for Error {
 
 impl error::Error for Error {}
 
+// TODO: implement this
 impl From<io::Error> for Error {
-    fn from(e: io::Error) -> Self {
+    fn from(_e: io::Error) -> Self {
         Error{}
     }
 }

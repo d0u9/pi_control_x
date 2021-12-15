@@ -3,6 +3,7 @@ pub use udev::EventType;
 use std::path::PathBuf;
 use std::ffi::OsString;
 
+#[allow(unused_code)]
 #[derive(Default, Clone, Debug)]
 pub struct Event {
     squence_number: u64,

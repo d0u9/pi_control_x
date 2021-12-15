@@ -1,6 +1,5 @@
 use ::std::ffi::OsStr;
 use ::udev::{MonitorBuilder, MonitorSocket};
-use ::tokio::sync::broadcast;
 use ::tokio::io::unix::AsyncFd;
 use ::tokio::io::Interest;
 use ::std::os::unix::io::{AsRawFd, RawFd};
@@ -32,14 +31,18 @@ impl UdevMonitor {
     }
 
     pub fn listen(self) -> Result<UdevSocket> {
-        let mut socket = self.builder.listen()?;
-        let mut socket = AsyncFd::with_interest(socket, Interest::READABLE)?;
-        Ok(UdevSocket{ async_fd: socket })
+        let monitor_socket = self.builder.listen()?;
+        let sock_fd = monitor_socket.as_raw_fd();
+        let async_fd = AsyncFd::with_interest(sock_fd, Interest::READABLE)?;
+        Ok(UdevSocket{ async_fd, monitor_socket })
     }
 }
 
+type MonitorSocketFd = RawFd;
+
 pub(crate) struct UdevSocket {
-    async_fd: AsyncFd<MonitorSocket>,
+    async_fd: AsyncFd<MonitorSocketFd>,
+    monitor_socket: MonitorSocket,
 }
 
 impl UdevSocket {
@@ -48,7 +51,7 @@ impl UdevSocket {
             let mut guard = self.async_fd.readable().await?;
             guard.clear_ready();
 
-            let socket = self.async_fd.get_ref().clone();
+            let socket = self.monitor_socket.clone();
             let events = socket.map(|x| x.into()).collect::<Vec<_>>();
             if events.len() > 0 {
                 return Ok(events);

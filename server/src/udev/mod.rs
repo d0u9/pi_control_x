@@ -2,30 +2,39 @@
 mod mod_test;
 
 pub(crate) mod udev;
+#[allow(unused_imports)]
 pub(crate) use self::udev::UdevSocket;
+#[allow(unused_imports)]
 pub(crate) use self::udev::UdevMonitor;
 
 pub(crate) mod event;
+#[allow(unused_imports)]
 pub(crate) use self::event::Event;
 
-use ::std::sync::{Mutex, Arc};
-use ::std::ffi::{OsStr, OsString};
-use ::tokio::sync::broadcast;
-use crate::result::{Result, Error};
+use crate::Shutdown::ShutdownReceiver;
 
 struct UdevPoller {
-    socket: Arc<Mutex<UdevSocket>>,
+    socket: UdevSocket,
 }
 
 impl UdevPoller {
     pub fn new(socket: UdevSocket) -> Self {
-        UdevPoller{ socket: Arc::new(Mutex::new(socket)) }
+        UdevPoller{ socket }
     }
 
-    pub fn spawn(self) {
+    pub fn spawn(mut self, shutdown: ShutdownReceiver) -> tokio::task::JoinHandle<()> {
+        let mut shutdown = shutdown;
         tokio::spawn(async move {
-            let mut socket = self.socket.lock().unwrap();
-            let e = socket.read().await;
-        });
+            loop {
+                tokio::select! {
+                    e = self.socket.read() => {
+                        println!("Event: {:?}", e);
+                    }
+                    _ = shutdown.wait() => {
+                        break;
+                    }
+                }
+            }
+        })
     }
 }
