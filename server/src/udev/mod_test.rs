@@ -22,6 +22,8 @@ async fn udev_test() {
 }
 
 use super::UdevPoller;
+use ::tokio::time;
+use std::time::Duration;
 
 #[tokio::test]
 async fn udev_poll_test() {
@@ -35,8 +37,15 @@ async fn udev_poll_test() {
 
     let (send, recv) = Shutdown::new();
     let poller = UdevPoller::new(socket);
+    let mut events = poller.subscribe();
     let handler = poller.spawn(recv);
-    ::tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+    loop {
+        ::tokio::select! {
+            _ = time::sleep(Duration::from_secs(10)) => { break; }
+            Ok(e) = events.recv() => { println!("New Event: {:?}", e); }
+        }
+    }
+
     send.shutdown();
     handler.await.unwrap();
 }
