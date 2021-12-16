@@ -11,20 +11,20 @@ pub(crate) mod event;
 #[allow(unused_imports)]
 pub(crate) use self::event::Event;
 
-use ::tokio::sync::broadcast;
-use crate::Shutdown::ShutdownReceiver;
+use crate::shutdown::ShutdownReceiver;
+use crate::core::EventEnum;
+use crate::core::bus::{self, BusSender, BusReceiver};
 
 struct UdevPoller {
     socket: UdevSocket,
-    notifier: broadcast::Sender<Event>,
+    notifier: BusSender,
 }
 
 impl UdevPoller {
-    pub fn new(socket: UdevSocket) -> Self {
-        let (tx, _rx) = broadcast::channel(16);
-        UdevPoller{
+    pub fn new(socket: UdevSocket, bus: bus::Bus) -> Self {
+        Self {
             socket,
-            notifier: tx,
+            notifier: bus.sender(),
         }
     }
 
@@ -35,7 +35,7 @@ impl UdevPoller {
                 tokio::select! {
                     Ok(events) = self.socket.read() => {
                         events.into_iter().for_each(|x| {
-                            if let Err(e) = self.notifier.send(x) {
+                            if let Err(e) = self.notifier.send(EventEnum::Udev(x)) {
                                 println!("Lost event: error = {:?}", e);
                             }
                         });
@@ -46,9 +46,5 @@ impl UdevPoller {
                 }
             }
         })
-    }
-
-    pub fn subscribe(&self) -> broadcast::Receiver<Event> {
-        self.notifier.subscribe()
     }
 }

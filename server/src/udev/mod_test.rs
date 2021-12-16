@@ -1,6 +1,6 @@
 #[cfg(test)]
 use super::udev::UdevMonitor;
-use crate::Shutdown;
+use crate::shutdown;
 
 #[tokio::test]
 async fn udev_test() {
@@ -24,6 +24,7 @@ async fn udev_test() {
 use super::UdevPoller;
 use ::tokio::time;
 use std::time::Duration;
+use crate::core::bus;
 
 #[tokio::test]
 async fn udev_poll_test() {
@@ -35,9 +36,11 @@ async fn udev_poll_test() {
         .unwrap()
         ;
 
-    let (send, recv) = Shutdown::new();
-    let poller = UdevPoller::new(socket);
-    let mut events = poller.subscribe();
+    let (send, recv) = shutdown::new();
+
+    let bus = bus::Bus::new();
+    let poller = UdevPoller::new(socket, bus.clone());
+    let mut events = bus.receiver();
     let handler = poller.spawn(recv);
     loop {
         ::tokio::select! {
