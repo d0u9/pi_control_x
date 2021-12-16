@@ -3,11 +3,23 @@ use std::fmt;
 use std::result;
 use std::convert::From;
 use std::io;
+use std::fmt::Debug;
+use lfs_core;
 
 pub type Result<T> = result::Result<T, Error>;
 
 #[derive(Debug)]
-pub struct Error {}
+pub struct Error {
+    msg: String,
+}
+
+impl Error {
+    pub fn with_str(s: &str) -> Self {
+        Self {
+            msg: s.to_owned(),
+        }
+    }
+}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -17,9 +29,20 @@ impl fmt::Display for Error {
 
 impl error::Error for Error {}
 
-// TODO: implement this
 impl From<io::Error> for Error {
-    fn from(_e: io::Error) -> Self {
-        Error{}
+    fn from(e: io::Error) -> Self {
+        Error{
+            msg: format!("[IO]: {:?}", e),
+        }
     }
 }
+
+impl From<lfs_core::Error> for Error {
+    fn from(e: lfs_core::Error) -> Self {
+        Error{
+            msg: format!("[LFS_CORE]: {:?}", e),
+        }
+    }
+}
+
+
