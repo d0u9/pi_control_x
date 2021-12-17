@@ -1,8 +1,8 @@
 use ::std::collections::HashMap;
 use ::tokio::sync::broadcast;
 
-use crate::udev;
 use super::bus;
+use crate::udev;
 
 #[derive(Clone, Debug)]
 pub enum EventEnum {
@@ -25,4 +25,3 @@ impl Core {
         self
     }
 }
-

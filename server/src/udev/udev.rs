@@ -1,12 +1,12 @@
 use ::std::ffi::OsStr;
-use ::udev::{MonitorBuilder, MonitorSocket};
+use ::std::os::unix::io::{AsRawFd, RawFd};
 use ::tokio::io::unix::AsyncFd;
 use ::tokio::io::Interest;
-use ::std::os::unix::io::{AsRawFd, RawFd};
+use ::udev::{MonitorBuilder, MonitorSocket};
 // use ::mio::{Events, Interest, Poll, Token};
 
-use crate::result::Result;
 use super::event::Event;
+use crate::result::Result;
 
 pub(crate) struct UdevMonitor {
     builder: MonitorBuilder,
@@ -16,7 +16,7 @@ impl UdevMonitor {
     pub fn new() -> Result<Self> {
         let builder = udev::MonitorBuilder::new()?;
 
-        Ok( UdevMonitor{ builder } )
+        Ok(UdevMonitor { builder })
     }
 
     pub fn match_subsystem_devtype<T, U>(self, subsystem: T, devtype: U) -> Result<Self>
@@ -24,17 +24,19 @@ impl UdevMonitor {
         T: AsRef<OsStr>,
         U: AsRef<OsStr>,
     {
-        let builder = self.builder
-            .match_subsystem_devtype(subsystem, devtype)?;
+        let builder = self.builder.match_subsystem_devtype(subsystem, devtype)?;
 
-        Ok( UdevMonitor{ builder } )
+        Ok(UdevMonitor { builder })
     }
 
     pub fn listen(self) -> Result<UdevSocket> {
         let monitor_socket = self.builder.listen()?;
         let sock_fd = monitor_socket.as_raw_fd();
         let async_fd = AsyncFd::with_interest(sock_fd, Interest::READABLE)?;
-        Ok(UdevSocket{ async_fd, monitor_socket })
+        Ok(UdevSocket {
+            async_fd,
+            monitor_socket,
+        })
     }
 }
 

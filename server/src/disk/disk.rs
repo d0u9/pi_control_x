@@ -62,5 +62,3 @@ impl From<lfs_core::Mount> for Disk {
         }
     }
 }
-
-

@@ -3,17 +3,17 @@ mod mod_test;
 
 pub(crate) mod udev;
 #[allow(unused_imports)]
-pub(crate) use self::udev::UdevSocket;
-#[allow(unused_imports)]
 pub(crate) use self::udev::UdevMonitor;
+#[allow(unused_imports)]
+pub(crate) use self::udev::UdevSocket;
 
 pub(crate) mod event;
 #[allow(unused_imports)]
 pub(crate) use self::event::{Event, EventType};
 
-use crate::shutdown::ShutdownReceiver;
+use crate::core::bus::{self, BusReceiver, BusSender};
 use crate::core::EventEnum;
-use crate::core::bus::{self, BusSender, BusReceiver};
+use crate::shutdown::ShutdownReceiver;
 
 struct UdevPoller {
     socket: UdevSocket,

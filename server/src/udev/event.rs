@@ -1,8 +1,8 @@
 pub use udev::EventType;
 
-use std::path::PathBuf;
-use std::ffi::OsString;
 use libc::dev_t;
+use std::ffi::OsString;
+use std::path::PathBuf;
 
 #[derive(Default, Clone, Debug)]
 pub struct Event {
@@ -39,4 +39,3 @@ impl std::convert::From<udev::Event> for Event {
         }
     }
 }
-

@@ -5,19 +5,18 @@ use crate::event_generator;
 
 #[tokio::test]
 async fn mounter_test() {
-    let mounter = Builder::new()
-        .commit();
+    let mounter = Builder::new().commit();
 
     mounter.mount_as_label("/dev/vdb1").unwrap();
     println!("donw");
 }
 
-use ::tokio::time::{self, Duration};
-use ::std::path::PathBuf;
-use ::std::ffi::OsString;
 use crate::core::EventEnum;
-use crate::udev::{Event as UdevEvent, EventType as UdevEventType};
 use crate::shutdown::{self, *};
+use crate::udev::{Event as UdevEvent, EventType as UdevEventType};
+use ::std::ffi::OsString;
+use ::std::path::PathBuf;
+use ::tokio::time::{self, Duration};
 
 #[tokio::test]
 async fn mounter_poller_test() {
@@ -26,7 +25,7 @@ async fn mounter_poller_test() {
     let event_generator = event_generator::Builder::new()
         .start(Duration::from_secs(1))
         .interval(Duration::from_secs(130))
-        .event(EventEnum::Udev(UdevEvent{
+        .event(EventEnum::Udev(UdevEvent {
             squence_number: 15,
             event_type: UdevEventType::Add,
             syspath: PathBuf::from("/sys/test"),
@@ -40,7 +39,6 @@ async fn mounter_poller_test() {
 
     let (generator_shutsend, generator_shutrecv) = shutdown::new();
     let generator_handler = generator_poller.spawn(generator_shutrecv);
-
 
     let mounter = Builder::new().commit();
     let poller = MounterPoller::new(mounter, bus);

@@ -1,31 +1,24 @@
-use ::std::path::Path;
-use ::std::fs::create_dir;
-use ::std::ffi::{OsStr, OsString};
-use sys_mount::{Mount, MountFlags, SupportedFilesystems};
-use crate::result::{Result, Error};
 use crate::core::EventEnum;
+use crate::result::{Error, Result};
 use crate::udev;
+use ::std::ffi::{OsStr, OsString};
+use ::std::fs::create_dir;
+use ::std::path::Path;
+use sys_mount::{Mount, MountFlags, SupportedFilesystems};
 
-pub struct Builder {
-
-}
+pub struct Builder {}
 
 impl Builder {
     pub fn new() -> Self {
-        Self {
-        }
+        Self {}
     }
 
     pub fn commit(self) -> Mounter {
-        Mounter {
-
-        }
+        Mounter {}
     }
 }
 
-pub struct Mounter {
-
-}
+pub struct Mounter {}
 
 impl Mounter {
     pub fn mount(&self) -> Result<()> {
@@ -44,7 +37,6 @@ impl Mounter {
         let dev_path = Path::new(&label_info.fs_name)
             .file_name()
             .ok_or(Error::with_str("label fs_name is wrong"))?;
-
 
         let parent = Path::new("/mnt/removable");
         if !parent.is_dir() {
@@ -67,12 +59,15 @@ impl Mounter {
     }
 
     fn event_udev(&self, event: udev::Event) -> Result<Option<EventEnum>> {
-        let dev_node = event.devnode.ok_or(Error::with_str("Device has no devnode"))?;
+        let dev_node = event
+            .devnode
+            .ok_or(Error::with_str("Device has no devnode"))?;
         let dev_node = Path::new(&dev_node);
-        self.mount_as_label(dev_node
-                            .to_str()
-                            .ok_or(Error::with_str("Invalid dev path"))?
-                        )?;
+        self.mount_as_label(
+            dev_node
+                .to_str()
+                .ok_or(Error::with_str("Invalid dev path"))?,
+        )?;
 
         Ok(Some(EventEnum::NULL))
     }
@@ -80,13 +75,7 @@ impl Mounter {
     fn do_mount(&self, dev: &Path, target: &Path) -> Result<()> {
         let supported = SupportedFilesystems::new()?;
 
-        let mount_result = Mount::new(
-            dev,
-            target,
-            &supported,
-            MountFlags::empty(),
-            None
-        )?;
+        let mount_result = Mount::new(dev, target, &supported, MountFlags::empty(), None)?;
 
         Ok(())
     }

@@ -1,5 +1,5 @@
-use ::tokio::sync::broadcast;
 use super::EventEnum;
+use ::tokio::sync::broadcast;
 
 pub type BusSender = broadcast::Sender<EventEnum>;
 pub type BusReceiver = broadcast::Receiver<EventEnum>;

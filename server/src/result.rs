@@ -1,10 +1,10 @@
+use lfs_core;
+use std::convert::From;
 use std::error;
 use std::fmt;
-use std::result;
-use std::convert::From;
-use std::io;
 use std::fmt::Debug;
-use lfs_core;
+use std::io;
+use std::result;
 
 pub type Result<T> = result::Result<T, Error>;
 
@@ -15,9 +15,7 @@ pub struct Error {
 
 impl Error {
     pub fn with_str(s: &str) -> Self {
-        Self {
-            msg: s.to_owned(),
-        }
+        Self { msg: s.to_owned() }
     }
 }
 
@@ -31,7 +29,7 @@ impl error::Error for Error {}
 
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
-        Error{
+        Error {
             msg: format!("[IO]: {:?}", e),
         }
     }
@@ -39,10 +37,8 @@ impl From<io::Error> for Error {
 
 impl From<lfs_core::Error> for Error {
     fn from(e: lfs_core::Error) -> Self {
-        Error{
+        Error {
             msg: format!("[LFS_CORE]: {:?}", e),
         }
     }
 }
-
-

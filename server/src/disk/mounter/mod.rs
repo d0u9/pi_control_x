@@ -4,8 +4,8 @@ mod mod_test;
 pub mod mounter;
 pub use mounter::*;
 
+use crate::core::bus::{self, BusReceiver, BusSender};
 use crate::shutdown::ShutdownReceiver;
-use crate::core::bus::{self, BusSender, BusReceiver};
 
 pub struct MounterPoller {
     mounter: Mounter,
@@ -14,10 +14,7 @@ pub struct MounterPoller {
 
 impl MounterPoller {
     pub fn new(mounter: Mounter, bus: bus::Bus) -> Self {
-        Self {
-            mounter,
-            bus
-        }
+        Self { mounter, bus }
     }
 
     pub fn spawn(mut self, shutdown: ShutdownReceiver) -> tokio::task::JoinHandle<()> {

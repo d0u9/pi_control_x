@@ -1,8 +1,8 @@
-use ::tokio::time::{self, Duration};
+use crate::core::bus::{self, BusReceiver, BusSender};
 use crate::core::EventEnum;
+use crate::result::{Error, Result};
 use crate::shutdown::ShutdownReceiver;
-use crate::core::bus::{self, BusSender, BusReceiver};
-use crate::result::{Result, Error};
+use ::tokio::time::{self, Duration};
 
 #[derive(Default)]
 pub struct Builder {
@@ -32,7 +32,9 @@ impl Builder {
     }
 
     pub fn commit(self) -> Result<Generator> {
-        let e1 = self.event.ok_or(Error::with_str("Generator event is not set"))?;
+        let e1 = self
+            .event
+            .ok_or(Error::with_str("Generator event is not set"))?;
         let generator = Generator {
             start: self.start,
             interval: self.interval,
@@ -77,7 +79,6 @@ impl GeneratorPoller {
         let start = self.inner.start;
 
         tokio::spawn(async move {
-
             time::sleep(start).await;
             let first_event = self.inner.issue_event(true).await.unwrap();
             println!("First generator issue: {:?}", first_event);
@@ -104,4 +105,3 @@ impl GeneratorPoller {
         })
     }
 }
-

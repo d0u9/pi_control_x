@@ -9,11 +9,11 @@ async fn udev_test() {
         .match_subsystem_devtype("block", "disk")
         .expect("Cannot add subsystem")
         .listen()
-        .unwrap()
-        ;
+        .unwrap();
 
     loop {
-        let events = socket.read()
+        let events = socket
+            .read()
             .await
             .unwrap()
             .into_iter()
@@ -22,9 +22,9 @@ async fn udev_test() {
 }
 
 use super::UdevPoller;
+use crate::core::bus;
 use ::tokio::time;
 use std::time::Duration;
-use crate::core::bus;
 
 #[tokio::test]
 async fn udev_poll_test() {
@@ -33,8 +33,7 @@ async fn udev_poll_test() {
         .match_subsystem_devtype("block", "disk")
         .expect("Cannot add subsystem")
         .listen()
-        .unwrap()
-        ;
+        .unwrap();
 
     let (send, recv) = shutdown::new();
 
