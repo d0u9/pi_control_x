@@ -67,8 +67,9 @@ impl Mounter {
     }
 
     fn event_udev(&self, event: udev::Event) -> Result<Option<EventEnum>> {
-        let dev_path = Path::new("/dev").join(event.sysname);
-        self.mount_as_label(dev_path
+        let dev_node = event.devnode.ok_or(Error::with_str("Device has no devnode"))?;
+        let dev_node = Path::new(&dev_node);
+        self.mount_as_label(dev_node
                             .to_str()
                             .ok_or(Error::with_str("Invalid dev path"))?
                         )?;

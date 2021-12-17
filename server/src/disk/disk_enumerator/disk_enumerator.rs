@@ -1,6 +1,6 @@
 use ::std::path::{Path, PathBuf};
-use ::lfs_core::{self, Mount};
 use crate::result::{Result, Error};
+use crate::disk::Disk;
 
 #[derive(Debug, Default)]
 pub struct Builder {
@@ -32,16 +32,19 @@ pub struct DiskEnumerator {
 impl DiskEnumerator {
 
     // Doesn't go over filter
-    pub fn get_all(&self) -> Result<Vec<Mount>> {
-        let mounts = lfs_core::read_mounts()?;
+    pub fn get_all(&self) -> Result<Vec<Disk>> {
+        let mounts = ::lfs_core::read_mounts()?
+            .into_iter()
+            .map(|m| m.into())
+            .collect::<Vec<_>>();
         Ok(mounts)
     }
 
     // Applied filter on
-    pub fn get(&self) -> Result<Vec<Mount>> {
+    pub fn get(&self) -> Result<Vec<Disk>> {
         let mounts = self.get_all()?;
         let result = mounts.into_iter()
-            .filter(|x| x.info.mount_point.starts_with(&self.mount_point_prefix))
+            .filter(|x| x.mount_point.starts_with(&self.mount_point_prefix))
             .collect::<Vec<_>>();
         Ok(result)
     }

@@ -2,6 +2,7 @@ pub use udev::EventType;
 
 use std::path::PathBuf;
 use std::ffi::OsString;
+use libc::dev_t;
 
 #[derive(Default, Clone, Debug)]
 pub struct Event {
@@ -10,8 +11,19 @@ pub struct Event {
     pub syspath: PathBuf,
     pub sysname: OsString,
     pub devtype: Option<OsString>,
+    pub devnum: Option<dev_t>,
+    pub devpath: OsString,
+    pub devnode: Option<PathBuf>,
+    pub action: Option<OsString>,
 }
 
+// Unused udev-rs functions:
+//
+// &self.is_initialized()
+// &self.subsystem()
+// &self.sysnum()
+// &self.driver()
+// &self.parent()
 impl std::convert::From<udev::Event> for Event {
     fn from(uevent: udev::Event) -> Self {
         Self {
@@ -20,8 +32,11 @@ impl std::convert::From<udev::Event> for Event {
             syspath: uevent.syspath().to_owned(),
             sysname: uevent.sysname().to_owned(),
             devtype: uevent.devtype().map(|x| x.to_owned()),
+            devnum: uevent.devnum(),
+            devpath: uevent.devpath().to_owned(),
+            devnode: uevent.devnode().map(|v| v.to_owned()),
+            action: uevent.action().map(|v| v.to_owned()),
         }
     }
 }
-
 

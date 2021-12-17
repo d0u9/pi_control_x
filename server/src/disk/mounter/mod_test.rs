@@ -30,8 +30,9 @@ async fn mounter_poller_test() {
             squence_number: 15,
             event_type: UdevEventType::Add,
             syspath: PathBuf::from("/sys/test"),
-            sysname: OsString::from("vdb1"),
             devtype: None,
+            devnode: Some(PathBuf::from("/dev/vdb1")),
+            ..Default::default()
         }))
         .commit()
         .unwrap();
