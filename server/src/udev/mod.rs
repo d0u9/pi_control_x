@@ -9,7 +9,7 @@ pub(crate) use self::udev::UdevMonitor;
 
 pub(crate) mod event;
 #[allow(unused_imports)]
-pub(crate) use self::event::Event;
+pub(crate) use self::event::{Event, EventType};
 
 use crate::shutdown::ShutdownReceiver;
 use crate::core::EventEnum;

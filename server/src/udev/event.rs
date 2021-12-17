@@ -5,11 +5,11 @@ use std::ffi::OsString;
 
 #[derive(Default, Clone, Debug)]
 pub struct Event {
-    squence_number: u64,
-    event_type: EventType,
-    syspath: PathBuf,
-    sysname: OsString,
-    devtype: Option<OsString>,
+    pub squence_number: u64,
+    pub event_type: EventType,
+    pub syspath: PathBuf,
+    pub sysname: OsString,
+    pub devtype: Option<OsString>,
 }
 
 impl std::convert::From<udev::Event> for Event {

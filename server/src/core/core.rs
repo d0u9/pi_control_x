@@ -6,6 +6,7 @@ use super::bus;
 
 #[derive(Clone, Debug)]
 pub enum EventEnum {
+    NULL,
     Udev(udev::Event),
 }
 

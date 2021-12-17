@@ -1,7 +1,10 @@
 use ::std::path::Path;
 use ::std::fs::create_dir;
+use ::std::ffi::{OsStr, OsString};
 use sys_mount::{Mount, MountFlags, SupportedFilesystems};
 use crate::result::{Result, Error};
+use crate::core::EventEnum;
+use crate::udev;
 
 pub struct Builder {
 
@@ -29,9 +32,10 @@ impl Mounter {
         Ok(())
     }
 
-    //
     // Create a directory the same name as label, and mount disk there.
+    // dev: `/dev/vdb1`
     pub fn mount_as_label(&self, dev: &str) -> Result<()> {
+        println!("mount {:?}", dev);
         let label_info = lfs_core::read_labels()?
             .into_iter()
             .find(|x| x.fs_name == dev)
@@ -53,6 +57,23 @@ impl Mounter {
         self.do_mount(Path::new(dev), &mount_point)?;
 
         Ok(())
+    }
+
+    pub fn event_process(&self, event: EventEnum) -> Result<Option<EventEnum>> {
+        match event {
+            EventEnum::Udev(e) => self.event_udev(e),
+            _ => Ok(None),
+        }
+    }
+
+    fn event_udev(&self, event: udev::Event) -> Result<Option<EventEnum>> {
+        let dev_path = Path::new("/dev").join(event.sysname);
+        self.mount_as_label(dev_path
+                            .to_str()
+                            .ok_or(Error::with_str("Invalid dev path"))?
+                        )?;
+
+        Ok(Some(EventEnum::NULL))
     }
 
     fn do_mount(&self, dev: &Path, target: &Path) -> Result<()> {

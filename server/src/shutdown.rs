@@ -10,7 +10,7 @@ pub fn new() -> (ShutdownSender, ShutdownReceiver) {
 
 impl ShutdownSender {
     pub fn shutdown(self) {
-        self.0.send(()).unwrap();
+        self.0.send(()).unwrap_or_else(|e| { println!("Shutdown send filed: {:?}", e); } );
     }
 }
 
