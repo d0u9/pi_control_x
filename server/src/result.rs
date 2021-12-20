@@ -1,10 +1,12 @@
-use lfs_core;
 use std::convert::From;
 use std::error;
 use std::fmt;
 use std::fmt::Debug;
 use std::io;
 use std::result;
+
+#[cfg(target_os = "linux")]
+use lfs_core;
 
 pub type Result<T> = result::Result<T, Error>;
 
@@ -35,6 +37,7 @@ impl From<io::Error> for Error {
     }
 }
 
+#[cfg(target_os = "linux")]
 impl From<lfs_core::Error> for Error {
     fn from(e: lfs_core::Error) -> Self {
         Error {

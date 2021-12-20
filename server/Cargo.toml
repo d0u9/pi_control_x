@@ -14,9 +14,10 @@ path = "src/lib.rs"
 
 [dependencies]
 tokio = { version = "^1.14.0", features = ["macros", "rt", "sync", "net", "time"] }
-#udev = { version = "^0.6.2", features = ["mio"] }
-udev = { git = "https://github.com/d0u9/udev-rs", branch = "send" }
 libc = "0.2"
 mio = { version = "^0.7", features = ["os-ext"] }
-lfs-core = "0.6"
+
+[target.'cfg(linux)'.dependencies]
+lfs-core = { version = "0.6" }
 sys-mount = { version = "1.3", default-features = false }
+udev = { git = "https://github.com/d0u9/udev-rs", branch = "send" }
