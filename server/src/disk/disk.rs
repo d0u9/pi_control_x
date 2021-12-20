@@ -52,6 +52,8 @@ pub struct Disk {
             ),
         },
 */
+
+#[cfg(target_os = "linux")]
 impl From<lfs_core::Mount> for Disk {
     fn from(mount: lfs_core::Mount) -> Self {
         Self {

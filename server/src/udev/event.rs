@@ -1,4 +1,4 @@
-pub use udev::EventType;
+pub use ::udev::EventType;
 
 use libc::dev_t;
 use std::ffi::OsString;
