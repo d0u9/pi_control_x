@@ -1,7 +1,7 @@
 use std::convert::From;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Disk {
     pub mount_point: PathBuf,
     pub devnode: PathBuf,

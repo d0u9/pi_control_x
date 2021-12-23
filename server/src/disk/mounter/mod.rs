@@ -1,6 +1,10 @@
 #[cfg(test)]
 mod mod_test;
 
+pub(crate) mod event;
+#[allow(unused_imports)]
+pub(crate) use self::event::Event;
+
 pub mod mounter;
 pub use mounter::*;
 
@@ -17,7 +21,7 @@ impl MounterPoller {
         Self { mounter, bus }
     }
 
-    pub fn spawn(mut self, shutdown: ShutdownReceiver) -> tokio::task::JoinHandle<()> {
+    pub fn spawn(self, shutdown: ShutdownReceiver) -> tokio::task::JoinHandle<()> {
         let mut shutdown = shutdown;
         let mut bus_listener = self.bus.receiver();
         let bus_sender = self.bus.sender();
@@ -27,7 +31,7 @@ impl MounterPoller {
                     Ok(event) = bus_listener.recv() => {
                         let reply_event = self.mounter.event_process(event).unwrap();
                         if let Some(event) = reply_event {
-                            bus_sender.send(event);
+                            let _ = bus_sender.send(event);
                         }
                     }
                     _ = shutdown.wait() => {

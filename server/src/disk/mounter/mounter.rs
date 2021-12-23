@@ -1,10 +1,11 @@
 use crate::core::EventEnum;
 use crate::result::{Error, Result};
 use crate::udev;
-use ::std::ffi::{OsStr, OsString};
 use ::std::fs::create_dir;
 use ::std::path::Path;
 use sys_mount::{Mount, MountFlags, SupportedFilesystems};
+
+use super::Event;
 
 pub struct Builder {}
 
@@ -44,7 +45,7 @@ impl Mounter {
         }
 
         let mount_point = parent.join(dev_path);
-        create_dir(&mount_point);
+        let _ = create_dir(&mount_point);
 
         self.do_mount(Path::new(dev), &mount_point)?;
 
@@ -69,7 +70,9 @@ impl Mounter {
                 .ok_or(Error::with_str("Invalid dev path"))?,
         )?;
 
-        Ok(Some(EventEnum::NULL))
+        let event = EventEnum::Mounter(Event{});
+
+        Ok(Some(event))
     }
 
     fn do_mount(&self, dev: &Path, target: &Path) -> Result<()> {

@@ -6,4 +6,3 @@ pub mod mounter;
 
 #[cfg(target_os = "linux")]
 pub mod disk_enumerator;
-

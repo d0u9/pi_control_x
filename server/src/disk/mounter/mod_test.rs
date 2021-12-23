@@ -1,8 +1,6 @@
 #[cfg(test)]
 use super::*;
 
-use crate::event_generator;
-
 #[tokio::test]
 async fn mounter_test() {
     let mounter = Builder::new().commit();
@@ -11,10 +9,10 @@ async fn mounter_test() {
     println!("donw");
 }
 
+use crate::event_generator;
 use crate::core::EventEnum;
-use crate::shutdown::{self, *};
+use crate::shutdown;
 use crate::udev::{Event as UdevEvent, EventType as UdevEventType};
-use ::std::ffi::OsString;
 use ::std::path::PathBuf;
 use ::tokio::time::{self, Duration};
 
