@@ -70,7 +70,7 @@ impl Mounter {
                 .ok_or(Error::with_str("Invalid dev path"))?,
         )?;
 
-        let event = EventEnum::Mounter(Event{});
+        let event = EventEnum::Mounter(Event {});
 
         Ok(Some(event))
     }

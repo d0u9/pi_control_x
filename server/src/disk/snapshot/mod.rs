@@ -1,29 +1,26 @@
 #[cfg(test)]
 mod mod_test;
 
-pub mod disk_enumerator;
-pub use disk_enumerator::{Builder, DiskEnumerator};
+mod snapshot;
+pub use snapshot::{Builder, Snapshot};
 
-pub mod event;
+mod event;
 pub use event::Event;
 
 use crate::core::bus;
 use crate::shutdown::ShutdownReceiver;
 
-pub struct DiskEnumeratorPoller {
-    disk_enumerator: DiskEnumerator,
+pub struct SnapshotPoller {
+    snapshot: Snapshot,
     bus: bus::Bus,
 }
 
-impl DiskEnumeratorPoller {
-    pub fn new(disk_enumerator: DiskEnumerator, bus: bus::Bus) -> Self {
-        Self {
-            disk_enumerator,
-            bus,
-        }
+impl SnapshotPoller {
+    pub fn new(snapshot: Snapshot, bus: bus::Bus) -> Self {
+        Self { snapshot, bus }
     }
 
-    pub fn spawn(self, shutdown: ShutdownReceiver) -> tokio::task::JoinHandle<()> {
+    pub fn spawn(mut self, shutdown: ShutdownReceiver) -> tokio::task::JoinHandle<()> {
         let mut shutdown = shutdown;
         let mut bus_listener = self.bus.receiver();
         let bus_sender = self.bus.sender();
@@ -31,7 +28,7 @@ impl DiskEnumeratorPoller {
             loop {
                 tokio::select! {
                     Ok(event) = bus_listener.recv() => {
-                        let reply_event = self.disk_enumerator.event_process(event).unwrap();
+                        let reply_event = self.snapshot.event_process(event).unwrap();
                         if let Some(event) = reply_event {
                             let _ = bus_sender.send(event);
                         }

@@ -9,8 +9,8 @@ async fn mounter_test() {
     println!("donw");
 }
 
-use crate::event_generator;
 use crate::core::EventEnum;
+use crate::event_generator;
 use crate::shutdown;
 use crate::udev::{Event as UdevEvent, EventType as UdevEventType};
 use ::std::path::PathBuf;

@@ -1,9 +1,9 @@
-use crate::core::EventEnum;
-use crate::disk::Disk;
-use crate::result::{Error, Result};
-use crate::disk::mounter;
-use ::std::path::{Path, PathBuf};
 use super::Event;
+use crate::core::EventEnum;
+use crate::disk::mounter;
+use crate::disk::Disk;
+use crate::result::Result;
+use ::std::path::{Path, PathBuf};
 
 #[derive(Debug, Default)]
 pub struct Builder {
@@ -58,10 +58,9 @@ impl DiskEnumerator {
         }
     }
 
-
     fn event_mounter(&self, _event: mounter::Event) -> Result<Option<EventEnum>> {
         let disks = self.get()?;
-        let event = EventEnum::DiskEnumerator(Event{ disks });
+        let event = EventEnum::DiskEnumerator(Event { disks });
 
         Ok(Some(event))
     }

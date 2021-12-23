@@ -4,11 +4,13 @@ use ::tokio::sync::broadcast;
 use super::bus;
 
 #[cfg(target_os = "linux")]
-use crate::udev;
+use crate::disk::disk_enumerator;
 #[cfg(target_os = "linux")]
 use crate::disk::mounter;
+#[cfg(target_os = "linux")]
+use crate::udev;
 
-use crate::disk::disk_enumerator;
+use crate::disk::snapshot;
 
 #[derive(Clone, Debug)]
 pub enum EventEnum {
@@ -17,7 +19,10 @@ pub enum EventEnum {
     Udev(udev::Event),
     #[cfg(target_os = "linux")]
     Mounter(mounter::Event),
+    #[cfg(target_os = "linux")]
     DiskEnumerator(disk_enumerator::Event),
+
+    Snapshot(snapshot::Event),
 }
 
 pub struct Core {
