@@ -1,9 +1,10 @@
 use ::std::future::Future;
 use ::std::net::SocketAddr;
 use ::tonic::transport::Server;
+use crate::core::bus;
 use crate::result::{Result, Error};
 
-use super::api_server::DiskApiServer;
+use super::disk::DiskApiServer;
 
 #[derive(Debug, Default)]
 pub struct Builder {
@@ -40,15 +41,15 @@ pub struct GrpcServer {
 }
 
 impl GrpcServer {
-    pub async fn serve(self, shutdown: impl Future<Output = ()>) -> Result<()> {
-        let disk_service = self.disk_service.service();
+    pub async fn serve(self, bus: bus::Bus, shutdown: impl Future<Output = ()>) -> Result<()> {
+        let disk_service = self.disk_service.attach_bus(bus).service();
         let addr = self.addr.unwrap();
 
         println!("GRPC server is listening on: {}", &self.addr.unwrap());
 
         Server::builder()
             .add_service(disk_service)
-            .serve(addr)
+            .serve_with_shutdown(addr, shutdown)
             .await
             .unwrap();
 

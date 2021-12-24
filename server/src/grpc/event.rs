@@ -1,6 +1,6 @@
+use super::disk::DiskListEvent;
 
 #[derive(Clone, Debug)]
-pub struct Event {
-
+pub enum Event {
+    DiskList(DiskListEvent),
 }
-

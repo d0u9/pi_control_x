@@ -11,7 +11,7 @@ pub(crate) mod event;
 #[allow(unused_imports)]
 pub(crate) use self::event::{Event, EventType};
 
-use crate::core::bus::{self, BusReceiver, BusSender};
+use crate::core::bus::{self, BusSender};
 use crate::core::EventEnum;
 use crate::shutdown::ShutdownReceiver;
 

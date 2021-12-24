@@ -1,4 +1,4 @@
-use crate::core::bus::{self, BusReceiver, BusSender};
+use crate::core::bus;
 use crate::core::EventEnum;
 use crate::result::{Error, Result};
 use crate::shutdown::ShutdownReceiver;
@@ -72,7 +72,7 @@ impl GeneratorPoller {
         }
     }
 
-    pub fn spawn(mut self, shutdown: ShutdownReceiver) -> tokio::task::JoinHandle<()> {
+    pub fn spawn(self, shutdown: ShutdownReceiver) -> tokio::task::JoinHandle<()> {
         let mut shutdown = shutdown;
         let bus_sender = self.bus.sender();
         let mut bus_listener = self.bus.receiver();
@@ -82,7 +82,7 @@ impl GeneratorPoller {
             time::sleep(start).await;
             let first_event = self.inner.issue_event(true).await.unwrap();
             println!("First generator issue: {:?}", first_event);
-            bus_sender.send(first_event);
+            bus_sender.send(first_event).unwrap();
 
             loop {
                 tokio::select! {
@@ -94,7 +94,7 @@ impl GeneratorPoller {
                     // Send event to bus.
                     Ok(event) = self.inner.issue_event(false) => {
                         println!("Generator issue: {:?}", event);
-                        bus_sender.send(event);
+                        bus_sender.send(event).unwrap();
                     }
 
                     _ = shutdown.wait() => {
