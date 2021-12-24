@@ -1,8 +1,9 @@
 use super::Event;
 use crate::core::EventEnum;
-use crate::disk::disk_enumerator;
 use crate::disk::Disk;
 use crate::result::Result;
+#[cfg(target_os = "linux")]
+use crate::disk::disk_enumerator;
 
 #[derive(Debug, Default)]
 pub struct Builder;
@@ -29,11 +30,13 @@ impl Snapshot {
 
     pub fn event_process(&mut self, event: EventEnum) -> Result<Option<EventEnum>> {
         match event {
+            #[cfg(target_os = "linux")]
             EventEnum::DiskEnumerator(e) => self.event_disk_enumerator(e),
             _ => Ok(None),
         }
     }
 
+    #[cfg(target_os = "linux")]
     fn event_disk_enumerator(
         &mut self,
         event: disk_enumerator::Event,

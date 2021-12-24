@@ -8,6 +8,7 @@ async fn disk_snapshot_test() {
 }
 
 use crate::core::EventEnum;
+#[cfg(target_os = "linux")]
 use crate::disk::disk_enumerator::Event as DiskEnumeratorEvent;
 use crate::disk::Disk;
 use crate::event_generator;
@@ -16,6 +17,7 @@ use ::tokio::time::{self, Duration};
 use std::path::PathBuf;
 
 #[tokio::test]
+#[cfg(target_os = "linux")]
 async fn disk_snapshot_poller_test() {
     let bus = bus::Bus::new();
 
