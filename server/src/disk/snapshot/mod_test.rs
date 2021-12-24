@@ -11,7 +11,7 @@ use crate::core::EventEnum;
 #[cfg(target_os = "linux")]
 use crate::disk::disk_enumerator::Event as DiskEnumeratorEvent;
 use crate::disk::Disk;
-use crate::event_generator;
+use crate::dummy_event::generator as event_generator;
 use crate::shutdown;
 use ::tokio::time::{self, Duration};
 use std::path::PathBuf;

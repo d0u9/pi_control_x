@@ -2,7 +2,7 @@ pub mod core;
 pub mod result;
 pub mod shutdown;
 
-pub mod event_generator;
+pub mod dummy_event;
 
 pub mod disk;
 

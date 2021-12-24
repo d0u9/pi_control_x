@@ -11,7 +11,7 @@ async fn disk_enumerator_test() {
 
 use crate::core::EventEnum;
 use crate::disk::mounter::Event as MounterEvent;
-use crate::event_generator;
+use crate::dummy_event::generator as event_generator;
 use crate::shutdown;
 use ::tokio::time::{self, Duration};
 
