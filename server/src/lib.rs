@@ -8,3 +8,5 @@ pub mod disk;
 
 #[cfg(target_os = "linux")]
 pub mod udev;
+
+pub mod grpc;

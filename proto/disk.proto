@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option go_package = "pb";
+
+package grpc_api;
+
+service Disk {
+  rpc List(ListRequest) returns (ListReply) {}
+}
+
+message ListRequest {
+  string timestamp = 1;
+}
+
+message ListReply {
+  string timestamp = 1;
+}

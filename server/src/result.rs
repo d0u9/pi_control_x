@@ -2,11 +2,7 @@ use std::convert::From;
 use std::error;
 use std::fmt;
 use std::fmt::Debug;
-use std::io;
 use std::result;
-
-#[cfg(target_os = "linux")]
-use lfs_core;
 
 pub type Result<T> = result::Result<T, Error>;
 
@@ -29,6 +25,8 @@ impl fmt::Display for Error {
 
 impl error::Error for Error {}
 
+use std::io;
+
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
         Error {
@@ -36,6 +34,18 @@ impl From<io::Error> for Error {
         }
     }
 }
+
+use std::net;
+impl From<net::AddrParseError> for Error {
+    fn from(e: net::AddrParseError) -> Self {
+        Error {
+            msg: format!("[AddrParseError]: {:?}", e),
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+use lfs_core;
 
 #[cfg(target_os = "linux")]
 impl From<lfs_core::Error> for Error {
@@ -45,3 +55,4 @@ impl From<lfs_core::Error> for Error {
         }
     }
 }
+

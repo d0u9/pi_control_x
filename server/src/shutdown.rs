@@ -19,6 +19,6 @@ impl ShutdownSender {
 impl ShutdownReceiver {
     pub async fn wait(&mut self) {
         let inner = &mut self.0;
-        inner.await;
+        let _ = inner.await;
     }
 }

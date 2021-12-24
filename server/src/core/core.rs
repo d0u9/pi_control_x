@@ -11,6 +11,7 @@ use crate::disk::mounter;
 use crate::udev;
 
 use crate::disk::snapshot;
+use crate::grpc;
 
 #[derive(Clone, Debug)]
 pub enum EventEnum {
@@ -23,6 +24,7 @@ pub enum EventEnum {
     DiskEnumerator(disk_enumerator::Event),
 
     Snapshot(snapshot::Event),
+    Grpc(grpc::Event),
 }
 
 pub struct Core {
