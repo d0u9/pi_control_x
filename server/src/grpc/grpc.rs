@@ -106,7 +106,7 @@ impl EventHandler {
 
 #[derive(Clone)]
 pub(super) struct BusSwitch {
-    disk: bus::Bus<EventDiskList>
+    disk: bus::Bus<EventDiskList>,
 }
 
 impl BusSwitch {
@@ -125,4 +125,3 @@ impl BusSwitch {
         Some(EventEnum::Grpc(event))
     }
 }
-

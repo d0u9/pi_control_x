@@ -9,8 +9,8 @@ pub mod mounter;
 pub use mounter::*;
 
 use crate::core::bus;
-use crate::shutdown::ShutdownReceiver;
 use crate::core::EventEnum;
+use crate::shutdown::ShutdownReceiver;
 
 pub struct MounterPoller {
     mounter: Mounter,

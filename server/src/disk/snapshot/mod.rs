@@ -8,8 +8,8 @@ mod event;
 pub use event::Event;
 
 use crate::core::bus;
-use crate::shutdown::ShutdownReceiver;
 use crate::core::EventEnum;
+use crate::shutdown::ShutdownReceiver;
 
 pub struct SnapshotPoller {
     snapshot: Snapshot,

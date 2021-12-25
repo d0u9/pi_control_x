@@ -15,7 +15,7 @@ use crate::shutdown::{self, ShutdownReceiver};
 
 pub struct GrpcPoller {
     server: GrpcServer,
-    bus: bus::Bus<EventEnum>
+    bus: bus::Bus<EventEnum>,
 }
 
 impl GrpcPoller {
@@ -37,7 +37,6 @@ impl GrpcPoller {
         let mut event_handler = self.server.event_handler;
         event_handler.attach_bus(self.bus);
         let switch = event_handler.get_switch();
-
 
         tokio::spawn(async move {
             loop {
