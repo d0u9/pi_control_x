@@ -1,8 +1,9 @@
+use crate::core::bus;
+use crate::core::EventEnum;
+use crate::result::{Error, Result};
 use ::std::future::Future;
 use ::std::net::SocketAddr;
 use ::tonic::transport::Server;
-use crate::core::bus;
-use crate::result::{Result, Error};
 
 use super::disk::DiskApiServer;
 
@@ -26,9 +27,16 @@ impl Builder {
         self.addr.ok_or(Error::with_str("no address assigned"))?;
         let disk_service = DiskApiServer::new();
 
-        let grpc_server = GrpcServer {
+        let inner = GrpcServerInner {
             addr: self.addr,
             disk_service,
+        };
+
+        let event_handler = EventHandler;
+
+        let grpc_server = GrpcServer {
+            server: inner,
+            event_handler,
         };
 
         Ok(grpc_server)
@@ -36,11 +44,18 @@ impl Builder {
 }
 
 pub struct GrpcServer {
+    pub(super) server: GrpcServerInner,
+    pub(super) event_handler: EventHandler,
+}
+
+pub(super) struct GrpcServerInner {
     addr: Option<SocketAddr>,
     disk_service: DiskApiServer,
 }
 
-impl GrpcServer {
+pub(super) struct EventHandler;
+
+impl GrpcServerInner {
     pub async fn serve(self, bus: bus::Bus, shutdown: impl Future<Output = ()>) -> Result<()> {
         let disk_service = self.disk_service.attach_bus(bus).service();
         let addr = self.addr.unwrap();
@@ -54,5 +69,13 @@ impl GrpcServer {
             .unwrap();
 
         Ok(())
+    }
+}
+
+impl EventHandler {
+    pub fn event_process(&self, event: EventEnum) -> Result<Option<EventEnum>> {
+        match event {
+            _ => Ok(None),
+        }
     }
 }

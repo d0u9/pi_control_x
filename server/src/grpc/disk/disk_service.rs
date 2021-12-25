@@ -1,6 +1,6 @@
-use tonic::{Request, Response, Status};
 use grpc_api::disk_server::{Disk, DiskServer};
-use grpc_api::{ListRequest, ListReply};
+use grpc_api::{ListReply, ListRequest};
+use tonic::{Request, Response, Status};
 
 use crate::core::bus;
 use crate::core::EventEnum;
@@ -23,7 +23,9 @@ impl DiskApiServer {
     }
 
     pub fn service(self) -> DiskServer<Self> {
-        self.bus.as_ref().expect("DiskApiServer has no bus attached");
+        self.bus
+            .as_ref()
+            .expect("DiskApiServer has no bus attached");
         DiskServer::new(self)
     }
 
@@ -35,26 +37,17 @@ impl DiskApiServer {
 
 #[tonic::async_trait]
 impl Disk for DiskApiServer {
-    async fn list(
-        &self,
-        request: Request<ListRequest>,
-    ) -> Result<Response<ListReply>, Status> {
+    async fn list(&self, request: Request<ListRequest>) -> Result<Response<ListReply>, Status> {
         let bus_sender = self.bus.as_ref().unwrap().sender();
         let request = request.into_inner();
         let reply = ListReply {
             timestamp: format!("reply: {}", request.timestamp.clone()),
         };
-        bus_sender.send(
-            EventEnum::Grpc(
-                Event::DiskList (
-                    DiskListEvent {
-                        timestamp: request.timestamp,
-                    }
-                )
-            )
-        ).unwrap();
+        bus_sender
+            .send(EventEnum::Grpc(Event::DiskList(DiskListEvent {
+                timestamp: request.timestamp,
+            })))
+            .unwrap();
         Ok(Response::new(reply))
     }
 }
-
-

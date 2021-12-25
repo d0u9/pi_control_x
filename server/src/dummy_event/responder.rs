@@ -8,20 +8,16 @@ pub struct Builder {
 
 impl Builder {
     pub fn new() -> Self {
-        Self {
-            cb: |_| None,
-        }
+        Self { cb: |_| None }
     }
 
-    pub fn event_process(mut self, cb: fn(EventEnum)->Option<EventEnum>) -> Self {
+    pub fn event_process(mut self, cb: fn(EventEnum) -> Option<EventEnum>) -> Self {
         self.cb = cb;
         self
     }
 
     pub fn commit(self) -> Responder {
-        Responder {
-            cb: self.cb,
-        }
+        Responder { cb: self.cb }
     }
 }
 
@@ -62,8 +58,6 @@ impl ResponderPoller {
                     }
                 }
             }
-
         })
     }
-
 }

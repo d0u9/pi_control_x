@@ -1,9 +1,9 @@
 use super::Event;
 use crate::core::EventEnum;
-use crate::disk::Disk;
-use crate::result::Result;
 #[cfg(target_os = "linux")]
 use crate::disk::disk_enumerator;
+use crate::disk::Disk;
+use crate::result::Result;
 
 #[derive(Debug, Default)]
 pub struct Builder;
