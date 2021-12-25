@@ -5,14 +5,13 @@ use crate::shutdown;
 
 #[tokio::test]
 async fn grpc_test() {
-    let bus = bus::Bus::new();
     let grpc_server = Builder::new()
         .address("127.0.0.1:9000")
         .unwrap()
         .commit()
         .unwrap();
     let (_, mut tx) = shutdown::new();
-    grpc_server.server.serve(bus, tx.wait()).await.unwrap();
+    grpc_server.server.serve(tx.wait()).await.unwrap();
 }
 
 use crate::dummy_event::responder as event_responder;
@@ -23,7 +22,7 @@ async fn grpc_poller_response_test() {
     let bus = bus::Bus::new();
 
     let event_responder = event_responder::Builder::new()
-        .event_process(|event| None)
+        .event_process(|_event| None)
         .commit();
 
     let responder_poller = event_responder::ResponderPoller::new(event_responder, bus.clone());

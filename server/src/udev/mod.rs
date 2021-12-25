@@ -17,11 +17,11 @@ use crate::shutdown::ShutdownReceiver;
 
 struct UdevPoller {
     socket: UdevSocket,
-    notifier: BusSender,
+    notifier: BusSender<EventEnum>,
 }
 
 impl UdevPoller {
-    pub fn new(socket: UdevSocket, bus: bus::Bus) -> Self {
+    pub fn new(socket: UdevSocket, bus: bus::Bus<EventEnum>) -> Self {
         Self {
             socket,
             notifier: bus.sender(),

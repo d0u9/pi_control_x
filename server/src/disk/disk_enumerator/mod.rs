@@ -9,14 +9,15 @@ pub use event::Event;
 
 use crate::core::bus;
 use crate::shutdown::ShutdownReceiver;
+use crate::core::EventEnum;
 
 pub struct DiskEnumeratorPoller {
     disk_enumerator: DiskEnumerator,
-    bus: bus::Bus,
+    bus: bus::Bus<EventEnum>,
 }
 
 impl DiskEnumeratorPoller {
-    pub fn new(disk_enumerator: DiskEnumerator, bus: bus::Bus) -> Self {
+    pub fn new(disk_enumerator: DiskEnumerator, bus: bus::Bus<EventEnum>) -> Self {
         Self {
             disk_enumerator,
             bus,

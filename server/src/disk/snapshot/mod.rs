@@ -9,14 +9,15 @@ pub use event::Event;
 
 use crate::core::bus;
 use crate::shutdown::ShutdownReceiver;
+use crate::core::EventEnum;
 
 pub struct SnapshotPoller {
     snapshot: Snapshot,
-    bus: bus::Bus,
+    bus: bus::Bus<EventEnum>,
 }
 
 impl SnapshotPoller {
-    pub fn new(snapshot: Snapshot, bus: bus::Bus) -> Self {
+    pub fn new(snapshot: Snapshot, bus: bus::Bus<EventEnum>) -> Self {
         Self { snapshot, bus }
     }
 

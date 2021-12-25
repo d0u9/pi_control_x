@@ -8,16 +8,17 @@ pub(crate) use self::event::Event;
 pub mod mounter;
 pub use mounter::*;
 
-use crate::core::bus::{self, BusReceiver, BusSender};
+use crate::core::bus;
 use crate::shutdown::ShutdownReceiver;
+use crate::core::EventEnum;
 
 pub struct MounterPoller {
     mounter: Mounter,
-    bus: bus::Bus,
+    bus: bus::Bus<EventEnum>,
 }
 
 impl MounterPoller {
-    pub fn new(mounter: Mounter, bus: bus::Bus) -> Self {
+    pub fn new(mounter: Mounter, bus: bus::Bus<EventEnum>) -> Self {
         Self { mounter, bus }
     }
 

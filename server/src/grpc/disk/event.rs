@@ -1,4 +1,4 @@
 #[derive(Debug, Clone)]
-pub struct DiskListEvent {
+pub struct EventDiskList {
     pub timestamp: String,
 }

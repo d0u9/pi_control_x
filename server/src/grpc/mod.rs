@@ -10,15 +10,16 @@ pub use event::Event;
 pub mod disk;
 
 use crate::core::bus;
+use crate::core::EventEnum;
 use crate::shutdown::{self, ShutdownReceiver};
 
 pub struct GrpcPoller {
     server: GrpcServer,
-    bus: bus::Bus,
+    bus: bus::Bus<EventEnum>
 }
 
 impl GrpcPoller {
-    pub fn new(server: GrpcServer, bus: bus::Bus) -> Self {
+    pub fn new(server: GrpcServer, bus: bus::Bus<EventEnum>) -> Self {
         Self { server, bus }
     }
 
@@ -27,12 +28,16 @@ impl GrpcPoller {
         let mut bus_listener = self.bus.receiver();
         let bus_sender = self.bus.sender();
         let server = self.server.server;
-        let event_handler = self.server.event_handler;
         let (inner_shuttx, mut inner_shutrx) = shutdown::new();
 
         tokio::spawn(async move {
-            server.serve(self.bus, inner_shutrx.wait()).await.unwrap();
+            server.serve(inner_shutrx.wait()).await.unwrap();
         });
+
+        let mut event_handler = self.server.event_handler;
+        event_handler.attach_bus(self.bus);
+        let switch = event_handler.get_switch();
+
 
         tokio::spawn(async move {
             loop {
@@ -42,6 +47,9 @@ impl GrpcPoller {
                         if let Some(event) = reply_event {
                             let _ = bus_sender.send(event);
                         }
+                    }
+                    Some(event) = switch.poll() => {
+                        let _ = bus_sender.send(event);
                     }
                     _ = shutdown.wait() => {
                         break;

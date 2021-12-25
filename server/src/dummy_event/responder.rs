@@ -27,11 +27,11 @@ pub struct Responder {
 
 pub struct ResponderPoller {
     inner: Responder,
-    bus: bus::Bus,
+    bus: bus::Bus<EventEnum>,
 }
 
 impl ResponderPoller {
-    pub fn new(responder: Responder, bus: bus::Bus) -> Self {
+    pub fn new(responder: Responder, bus: bus::Bus<EventEnum>) -> Self {
         Self {
             inner: responder,
             bus,

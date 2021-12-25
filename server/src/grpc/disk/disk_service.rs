@@ -3,10 +3,8 @@ use grpc_api::{ListReply, ListRequest};
 use tonic::{Request, Response, Status};
 
 use crate::core::bus;
-use crate::core::EventEnum;
 
-use super::super::Event;
-use super::event::DiskListEvent;
+use super::EventDiskList;
 
 pub mod grpc_api {
     tonic::include_proto!("grpc_api"); // The string specified here must match the proto package name
@@ -14,7 +12,7 @@ pub mod grpc_api {
 
 #[derive(Debug, Default)]
 pub struct DiskApiServer {
-    bus: Option<bus::Bus>,
+    bus: Option<bus::Bus<EventDiskList>>,
 }
 
 impl DiskApiServer {
@@ -29,7 +27,7 @@ impl DiskApiServer {
         DiskServer::new(self)
     }
 
-    pub fn attach_bus(mut self, bus: bus::Bus) -> Self {
+    pub fn attach_bus(mut self, bus: bus::Bus<EventDiskList>) -> Self {
         self.bus = Some(bus);
         self
     }
@@ -44,9 +42,9 @@ impl Disk for DiskApiServer {
             timestamp: format!("reply: {}", request.timestamp.clone()),
         };
         bus_sender
-            .send(EventEnum::Grpc(Event::DiskList(DiskListEvent {
+            .send(EventDiskList {
                 timestamp: request.timestamp,
-            })))
+            })
             .unwrap();
         Ok(Response::new(reply))
     }

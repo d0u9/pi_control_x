@@ -1,6 +1,6 @@
-use super::disk::DiskListEvent;
+use super::disk::EventDiskList;
 
 #[derive(Clone, Debug)]
 pub enum Event {
-    DiskList(DiskListEvent),
+    Disk(EventDiskList),
 }

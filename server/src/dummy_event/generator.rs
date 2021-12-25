@@ -61,11 +61,11 @@ impl Generator {
 
 pub struct GeneratorPoller {
     inner: Generator,
-    bus: bus::Bus,
+    bus: bus::Bus<EventEnum>,
 }
 
 impl GeneratorPoller {
-    pub fn new(generator: Generator, bus: bus::Bus) -> Self {
+    pub fn new(generator: Generator, bus: bus::Bus<EventEnum>) -> Self {
         Self {
             inner: generator,
             bus,

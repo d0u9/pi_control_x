@@ -28,7 +28,7 @@ pub enum EventEnum {
 }
 
 pub struct Core {
-    bus: bus::Bus,
+    bus: bus::Bus<EventEnum>,
 }
 
 impl Core {
