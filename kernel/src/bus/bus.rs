@@ -1,51 +1,89 @@
-use ::std::fmt::Debug;
-use ::std::collections::HashMap;
-use ::std::future::Future;
 use ::futures::future;
+use ::std::collections::HashMap;
+use ::std::fmt::Debug;
+use ::std::future::Future;
 use ::tokio::sync::broadcast;
 use ::tokio::sync::mpsc;
 
 use super::router::*;
 
-#[derive(Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Address {
     addr: String,
 }
 
 impl Address {
     pub fn new(addr: &str) -> Address {
-        Self { addr: addr.to_owned() }
+        Self {
+            addr: addr.to_owned(),
+        }
     }
 }
 
-#[derive(Hash, PartialEq, Eq)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 enum BusAddress {
     Broadcast,
     Addr(Address),
 }
 
+#[derive(Clone, Debug)]
+struct Packet<T> {
+    src: Address,
+    dst: Address,
+    data: T,
+}
+
 pub struct Endpoint<T> {
-    tx: broadcast::Sender<T>,
-    rx: broadcast::Receiver<T>,
+    addr: Address,
+    pin_tx: broadcast::Sender<Packet<T>>,
+    pin_rx: broadcast::Receiver<Packet<T>>,
+    bus_tx: broadcast::Sender<Packet<T>>,
+    bus_rx: broadcast::Receiver<Packet<T>>,
+}
+
+impl<T: Clone> Clone for Endpoint<T> {
+    fn clone(&self) -> Self {
+        Self {
+            addr: self.addr.clone(),
+            pin_tx: self.pin_tx.clone(),
+            pin_rx: self.bus_tx.subscribe(),
+            bus_tx: self.bus_tx.clone(),
+            bus_rx: self.pin_tx.subscribe(),
+        }
+    }
 }
 
 impl<T: Clone + Debug> Endpoint<T> {
-    fn new() -> (Endpoint<T>, Endpoint<T>) {
+    fn new(addr: &Address) -> Endpoint<T> {
         let (bus_tx, pin_rx) = broadcast::channel(16);
         let (pin_tx, bus_rx) = broadcast::channel(16);
-        let bus_endpoint = Self {
-            tx: bus_tx,
-            rx: bus_rx,
-        };
-        let pin_endpoint = Self {
-            tx: pin_tx,
-            rx: pin_rx,
-        };
-        (bus_endpoint, pin_endpoint)
+
+        Self {
+            addr: (*addr).clone(),
+            pin_tx,
+            pin_rx,
+            bus_tx,
+            bus_rx,
+        }
     }
 
-    pub fn send(&self, val: T) {
-        self.tx.send(val).unwrap();
+    pub fn send(&self, dst: &Address, data: T) {
+        self.pin_tx
+            .send(Packet {
+                src: self.addr.clone(),
+                dst: (*dst).clone(),
+                data,
+            })
+            .unwrap();
+    }
+
+    pub async fn recv(&mut self) -> (Address, T) {
+        let packet = self.pin_rx.recv().await.unwrap();
+        (packet.src, packet.data)
+    }
+
+    fn bus_send(&self, packet: Packet<T>) {
+        self.bus_tx.send(packet).unwrap();
     }
 }
 
@@ -62,19 +100,26 @@ impl<T: Clone + Debug> Bus<T> {
         }
     }
 
-    pub fn crate_endpoint(&mut self, addr: Address) -> Endpoint<T> {
-        let (bus_point, pin_point) = Endpoint::new();
-        let _ = self.endpoints.insert(addr, bus_point);
-        pin_point
+    pub fn crate_endpoint(&mut self, addr: &Address) -> Endpoint<T> {
+        let endpoint = Endpoint::new(addr);
+        let addr = (*addr).clone();
+        let _ = self.endpoints.insert(addr, endpoint.clone());
+        endpoint
     }
 
     pub async fn poll(self, mut shutdown: mpsc::Receiver<()>) {
-        let mut endpoints = self.endpoints;
+        let endpoints = self.endpoints;
+        let mut bus_rxs = endpoints
+            .values()
+            .map(|x| x.pin_tx.subscribe())
+            .collect::<Vec<_>>();
         loop {
-            let futures_iter = endpoints.values_mut().map(|x| Box::pin(x.rx.recv()));
+            let pin_futures_iter = bus_rxs.iter_mut().map(|x| Box::pin(x.recv()));
             tokio::select! {
-                (output, _, _) = future::select_all(futures_iter) => {
-                    dbg!(output);
+                (Ok(packet), _, _) = future::select_all(pin_futures_iter) => {
+                    println!("BUS({:?}) [{:?} -> {:?}]: {:?}", self.name, packet.src, packet.dst, packet.data);
+                    let peer = endpoints.get(&packet.dst).unwrap();
+                    peer.bus_send(packet);
                 }
                 _ = shutdown.recv() => {
                     break;
