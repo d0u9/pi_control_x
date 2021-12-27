@@ -20,7 +20,7 @@ impl Address {
     }
 }
 
-#[derive(Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 enum BusAddress {
     Broadcast,
     Addr(Address),
@@ -28,13 +28,14 @@ enum BusAddress {
 
 #[derive(Clone, Debug)]
 struct Packet<T> {
-    src: Address,
-    dst: Address,
+    src: BusAddress,
+    dst: BusAddress,
     data: T,
 }
 
+#[derive(Debug)]
 pub struct Endpoint<T> {
-    addr: Address,
+    addr: BusAddress,
     pin_tx: broadcast::Sender<Packet<T>>,
     pin_rx: broadcast::Receiver<Packet<T>>,
     bus_tx: broadcast::Sender<Packet<T>>,
@@ -58,8 +59,9 @@ impl<T: Clone + Debug> Endpoint<T> {
         let (bus_tx, pin_rx) = broadcast::channel(16);
         let (pin_tx, bus_rx) = broadcast::channel(16);
 
+        let addr = (*addr).clone();
         Self {
-            addr: (*addr).clone(),
+            addr: BusAddress::Addr(addr),
             pin_tx,
             pin_rx,
             bus_tx,
@@ -68,18 +70,35 @@ impl<T: Clone + Debug> Endpoint<T> {
     }
 
     pub fn send(&self, dst: &Address, data: T) {
-        self.pin_tx
-            .send(Packet {
-                src: self.addr.clone(),
-                dst: (*dst).clone(),
-                data,
-            })
-            .unwrap();
+        let addr = (*dst).clone();
+        self.do_send(Packet {
+            src: self.addr.clone(),
+            dst: BusAddress::Addr(addr),
+            data,
+        })
     }
 
-    pub async fn recv(&mut self) -> (Address, T) {
+    pub fn broadcast(&self, data: T) {
+        let packet = Packet {
+            src: self.addr.clone(),
+            dst: BusAddress::Broadcast,
+            data,
+        };
+
+        self.do_send(packet)
+    }
+
+    fn do_send(&self, packet: Packet<T>) {
+        self.pin_tx.send(packet).unwrap();
+    }
+
+    pub async fn recv(&mut self) -> Option<(Address, T)> {
         let packet = self.pin_rx.recv().await.unwrap();
-        (packet.src, packet.data)
+        if let BusAddress::Addr(addr) = packet.src {
+            Some((addr, packet.data))
+        } else {
+            None
+        }
     }
 
     fn bus_send(&self, packet: Packet<T>) {
@@ -108,8 +127,8 @@ impl<T: Clone + Debug> Bus<T> {
     }
 
     pub async fn poll(self, mut shutdown: mpsc::Receiver<()>) {
-        let endpoints = self.endpoints;
-        let mut bus_rxs = endpoints
+        let mut bus_rxs = self
+            .endpoints
             .values()
             .map(|x| x.pin_tx.subscribe())
             .collect::<Vec<_>>();
@@ -118,13 +137,36 @@ impl<T: Clone + Debug> Bus<T> {
             tokio::select! {
                 (Ok(packet), _, _) = future::select_all(pin_futures_iter) => {
                     println!("BUS({:?}) [{:?} -> {:?}]: {:?}", self.name, packet.src, packet.dst, packet.data);
-                    let peer = endpoints.get(&packet.dst).unwrap();
-                    peer.bus_send(packet);
+                    match packet.dst {
+                        BusAddress::Addr(ref addr) => {
+                            let peer = self.endpoints.get(addr).unwrap();
+                            peer.bus_send(packet);
+                        }
+                        BusAddress::Broadcast => {
+                            self.broadcast_packet(packet);
+                        }
+                    }
                 }
                 _ = shutdown.recv() => {
                     break;
                 }
             }
         }
+    }
+
+    fn broadcast_packet(&self, packet: Packet<T>) {
+        let src_addr = match packet.src {
+            BusAddress::Addr(ref addr) => addr,
+            _ => return,
+        };
+
+        self.endpoints
+            .iter()
+            .filter(|(addr, _)| *addr != src_addr)
+            .for_each(|(_, peer)| {
+                let mut packet = packet.clone();
+                packet.dst = peer.addr.clone();
+                peer.bus_send(packet);
+            });
     }
 }

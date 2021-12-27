@@ -5,7 +5,7 @@ use ::tokio::time::Duration;
 
 #[tokio::test]
 async fn bus_test() {
-    let sleep_time = 500;
+    let sleep_time = 300;
 
     let mut bus = Bus::<String>::new("root");
     let mut endpoint1 = bus.crate_endpoint(&Address::new("ep1"));
@@ -29,6 +29,15 @@ async fn bus_test() {
     dbg!(endpoint2.recv().await);
 
     tokio::time::sleep(Duration::from_millis(sleep_time)).await;
+
+    endpoint1.broadcast("hahaha".to_string());
+
+    tokio::time::sleep(Duration::from_millis(sleep_time)).await;
+
+    dbg!(endpoint2.recv().await);
+
+    tokio::time::sleep(Duration::from_millis(sleep_time)).await;
+
     tx.send(()).await.unwrap();
 
     join_handler.await.unwrap();
