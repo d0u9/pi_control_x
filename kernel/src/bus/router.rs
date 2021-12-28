@@ -1,5 +1,6 @@
 use ::std::fmt::Debug;
 use ::tokio::sync::mpsc;
+use ::std::marker::PhantomData;
 
 use super::*;
 
@@ -12,6 +13,7 @@ pub enum RouterMode {
 #[derive(Debug)]
 pub struct Router<T, P> {
     mode: RouterMode,
+    allow_broadcast: bool,
     endpoints: Option<(Endpoint<T>, Endpoint<P>)>,
 }
 
@@ -20,20 +22,19 @@ where
     T: Debug + Clone + From<P>,
     P: Debug + Clone + From<T>,
 {
-    fn from_builder(builder: RouterBuilder) -> Self {
-        let mode = builder.mode.expect("No mode is specified");
-        Self {
-            mode,
-            endpoints: None,
-        }
+    pub fn build() -> Builder<T, P> {
+        Builder::new()
     }
-
     pub fn join(&mut self, ep0: Endpoint<T>, ep1: Endpoint<P>) {
         self.endpoints = Some((ep0, ep1))
     }
 
     pub fn mode(&self) -> RouterMode {
         self.mode.clone()
+    }
+
+    pub fn allow_broadcast(&self) -> bool {
+        self.allow_broadcast
     }
 
     pub async fn poll(self, mut shutdown: mpsc::Receiver<()>) {
@@ -64,14 +65,30 @@ where
     }
 }
 
-#[derive(Debug, Default)]
-pub struct RouterBuilder {
+#[derive(Debug)]
+pub struct Builder<T, P> {
     mode: Option<RouterMode>,
+    allow_broadcast: bool,
+    _phantom: PhantomData<(T, P)>,
 }
 
-impl RouterBuilder {
-    pub fn new() -> RouterBuilder {
-        RouterBuilder::default()
+impl<T, P> Builder<T, P> 
+where
+    T: Debug + Clone + From<P>,
+    P: Debug + Clone + From<T>,
+{
+    pub fn new() -> Builder<T, P> {
+        Self {
+            mode: None,
+            allow_broadcast: false,
+            _phantom: PhantomData,
+        }
+
+    }
+
+    pub fn allow_broadcast(mut self) -> Self {
+        self.allow_broadcast = true;
+        self
     }
 
     pub fn mode(mut self, mode: RouterMode) -> Self {
@@ -79,11 +96,16 @@ impl RouterBuilder {
         self
     }
 
-    pub fn create<T, P>(self) -> Router<T, P>
+    pub fn create(self) -> Router<T, P>
     where
         T: Clone + Debug + From<P>,
         P: Clone + Debug + From<T>,
     {
-        Router::<T, P>::from_builder(self)
+        let mode = self.mode.expect("No mode is specified");
+        Router {
+            mode,
+            allow_broadcast: false,
+            endpoints: None,
+        }
     }
 }

@@ -46,18 +46,18 @@ async fn bus_test() {
 
 #[tokio::test]
 async fn router_create_test() {
-    let _router = RouterBuilder::new()
+    let _router = Builder::<i32, i32>::new()
         .mode(RouterMode::FLAT)
-        .create::<i32, i32>();
+        .create();
 }
 
 use ::std::net::Ipv4Addr;
 
 #[tokio::test]
 async fn router_func_test() {
-    let mut router = RouterBuilder::new()
+    let mut router = Builder::<Ipv4Addr, u32>::new()
         .mode(RouterMode::FLAT)
-        .create::<Ipv4Addr, u32>();
+        .create();
 
     let mut parent_bus = Bus::<u32>::new("parent");
     let mut local_bus = Bus::<Ipv4Addr>::new("local");
