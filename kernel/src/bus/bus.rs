@@ -1,7 +1,7 @@
 use ::futures::future;
 use ::std::collections::HashMap;
 use ::std::fmt::Debug;
-use ::tokio::sync::mpsc;
+use ::std::future::Future;
 
 use super::*;
 
@@ -34,45 +34,64 @@ impl<T: Clone + Debug> Bus<T> {
         self.gateway = Some(addr);
     }
 
-    pub async fn poll(self, mut shutdown: mpsc::Receiver<()>) {
-        let mut bus_rxs = self
+    pub async fn serve(self, shutdown: impl Future<Output = ()>) {
+        tokio::select! {
+            _ = self.poll() => {}
+            _ = shutdown => {}
+        }
+    }
+
+    async fn poll(&self) {
+        let mut rx_pins = self
             .endpoints
             .values()
             .map(|x| x.pin_tx.subscribe())
             .collect::<Vec<_>>();
-        loop {
-            let pin_futures_iter = bus_rxs.iter_mut().map(|x| Box::pin(x.recv()));
-            tokio::select! {
-                (Ok(packet), _, _) = future::select_all(pin_futures_iter) => {
-                    println!("BUS({:?}) [{:?} -> {:?}]: {:?}", self.name, packet.src, packet.dst, packet.data);
-                    match packet.dst {
-                        BusAddress::Addr(ref addr) => {
-                            match self.endpoints.get(addr) {
-                                Some(peer) => {
-                                    peer.bus_send(packet);
-                                }
-                                None => match self.gateway {
-                                    Some(ref gateway) => {
-                                        let peer = self.endpoints.get(gateway).unwrap();
-                                        peer.bus_send(packet)
-                                    }
-                                    None => {
-                                        println!("Dropped!!!");
-                                    }
-                                }
-                            }
 
-                        }
-                        BusAddress::Broadcast => {
-                            self.broadcast_packet(packet);
-                        }
-                    }
+        loop {
+            let pin_futures = rx_pins.iter_mut().map(|x| Box::pin(x.recv()));
+            match future::select_all(pin_futures).await {
+                (Ok(pkt), _, _) => {
+                    self.process_pkt(pkt);
                 }
-                _ = shutdown.recv() => {
-                    break;
+                _ => {}
+            }
+        }
+    }
+
+    fn process_pkt(&self, pkt: Packet<T>) {
+        println!(
+            "BUS({:?}) [{:?} -> {:?}]: {:?}",
+            self.name, pkt.src, pkt.dst, pkt.data
+        );
+
+        let dst_addr = &pkt.dst.clone();
+
+        match dst_addr {
+            BusAddress::Broadcast => {
+                self.broadcast_packet(pkt);
+            }
+            BusAddress::Addr(ref addr) => {
+                self.send_to(pkt, addr);
+            }
+        }
+    }
+
+    fn send_to(&self, pkt: Packet<T>, addr: &Address) {
+        match self.get_endpoint_by_addr(addr) {
+            Some(peer) => {
+                peer.bus_send(pkt);
+            }
+            None => {
+                if let Some(gateway) = &self.gateway {
+                    self.send_to(pkt, gateway);
                 }
             }
         }
+    }
+
+    fn get_endpoint_by_addr(&self, addr: &Address) -> Option<&Endpoint<T>> {
+        self.endpoints.get(addr)
     }
 
     fn broadcast_packet(&self, packet: Packet<T>) {

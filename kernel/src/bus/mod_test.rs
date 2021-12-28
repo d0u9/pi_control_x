@@ -1,6 +1,7 @@
 #[cfg(test)]
 use super::*;
 
+use ::futures::future::FutureExt;
 use ::tokio::time::Duration;
 
 #[tokio::test]
@@ -10,9 +11,9 @@ async fn bus_test() {
     let mut bus = Bus::<String>::new("root");
     let mut endpoint1 = bus.create_endpoint(&Address::new("ep1"));
     let mut endpoint2 = bus.create_endpoint(&Address::new("ep2"));
-    let (tx, rx) = tokio::sync::mpsc::channel::<()>(2);
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<()>(2);
     let join_handler = tokio::spawn(async move {
-        bus.poll(rx).await;
+        bus.serve(rx.recv().map(|_| ())).await;
     });
 
     tokio::time::sleep(Duration::from_millis(sleep_time)).await;
@@ -46,9 +47,7 @@ async fn bus_test() {
 
 #[tokio::test]
 async fn router_create_test() {
-    let _router = Builder::<i32, i32>::new()
-        .mode(RouterMode::FLAT)
-        .create();
+    let _router = Builder::<i32, i32>::new().mode(RouterMode::FLAT).create();
 }
 
 use ::std::net::Ipv4Addr;
@@ -78,13 +77,13 @@ async fn router_func_test() {
     let parent_ep1_addr = Address::new("parent_ep1");
     let mut parent_ep1 = parent_bus.create_endpoint(&parent_ep1_addr);
 
-    let (local_tx, local_rx) = tokio::sync::mpsc::channel::<()>(2);
-    let (parent_tx, parent_rx) = tokio::sync::mpsc::channel::<()>(2);
+    let (local_tx, mut local_rx) = tokio::sync::mpsc::channel::<()>(2);
+    let (parent_tx, mut parent_rx) = tokio::sync::mpsc::channel::<()>(2);
     let (router_tx, router_rx) = tokio::sync::mpsc::channel::<()>(2);
     let join_handler = tokio::spawn(async move {
         tokio::join! {
-            local_bus.poll(local_rx),
-            parent_bus.poll(parent_rx),
+            local_bus.serve(local_rx.recv().map(|_|())),
+            parent_bus.serve(parent_rx.recv().map(|_|())),
             router.poll(router_rx),
         }
     });
@@ -92,7 +91,7 @@ async fn router_func_test() {
     let sleep_time = 300;
     tokio::time::sleep(Duration::from_millis(sleep_time)).await;
 
-    local_ep1.send(&parent_ep1_addr, Ipv4Addr::new(172,16,0,1));
+    local_ep1.send(&parent_ep1_addr, Ipv4Addr::new(172, 16, 0, 1));
 
     tokio::time::sleep(Duration::from_millis(sleep_time)).await;
     dbg!(parent_ep1.recv().await);

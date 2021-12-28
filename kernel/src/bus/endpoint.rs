@@ -3,6 +3,9 @@ use ::tokio::sync::broadcast;
 
 use super::*;
 
+pub(super) type TxPin<T> = broadcast::Sender<Packet<T>>;
+pub(super) type RxPin<T> = broadcast::Receiver<Packet<T>>;
+
 #[derive(Clone, Debug)]
 pub(super) struct Packet<T> {
     pub(super) src: BusAddress,
@@ -13,10 +16,10 @@ pub(super) struct Packet<T> {
 #[derive(Debug)]
 pub struct Endpoint<T> {
     pub(super) addr: BusAddress,
-    pub(super) pin_tx: broadcast::Sender<Packet<T>>,
-    pub(super) pin_rx: broadcast::Receiver<Packet<T>>,
-    pub(super) bus_tx: broadcast::Sender<Packet<T>>,
-    pub(super) bus_rx: broadcast::Receiver<Packet<T>>,
+    pub(super) pin_tx: TxPin<T>,
+    pub(super) pin_rx: RxPin<T>,
+    pub(super) bus_tx: TxPin<T>,
+    pub(super) bus_rx: RxPin<T>,
 }
 
 impl<T: Clone> Clone for Endpoint<T> {

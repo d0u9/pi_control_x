@@ -1,13 +1,13 @@
 use ::std::fmt::Debug;
-use ::tokio::sync::mpsc;
 use ::std::marker::PhantomData;
+use ::tokio::sync::mpsc;
 
 use super::*;
 
 #[derive(Debug, Clone)]
 pub enum RouterMode {
     FLAT,
-    // GATEWAY, 
+    // GATEWAY,
 }
 
 #[derive(Debug)]
@@ -66,7 +66,7 @@ pub struct Builder<S, D> {
     _phantom: PhantomData<(S, D)>,
 }
 
-impl<S, D> Builder<S, D> 
+impl<S, D> Builder<S, D>
 where
     S: Debug + Clone + From<D>,
     D: Debug + Clone + From<S>,
@@ -77,7 +77,6 @@ where
             allow_broadcast: false,
             _phantom: PhantomData,
         }
-
     }
 
     pub fn allow_broadcast(mut self) -> Self {
