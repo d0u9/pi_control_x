@@ -10,6 +10,7 @@ pub struct Bus<T> {
     name: String,
     endpoints: HashMap<Address, Endpoint<T>>,
     gateway: Option<Address>,
+    routers: Vec<Address>,
 }
 
 impl<T: Clone + Debug> Bus<T> {
@@ -18,6 +19,7 @@ impl<T: Clone + Debug> Bus<T> {
             name: name.to_owned(),
             endpoints: HashMap::new(),
             gateway: None,
+            routers: Vec::new(),
         }
     }
 
@@ -32,6 +34,11 @@ impl<T: Clone + Debug> Bus<T> {
         // TODO: test if addr is valid
         let addr = (*addr).clone();
         self.gateway = Some(addr);
+    }
+
+    pub fn attach_router(&mut self, addr: &Address) {
+        let addr = (*addr).clone();
+        self.routers.push(addr);
     }
 
     pub async fn serve(self, shutdown: impl Future<Output = ()>) {
@@ -69,10 +76,13 @@ impl<T: Clone + Debug> Bus<T> {
 
         match dst_addr {
             BusAddress::Broadcast => {
-                self.broadcast_packet(pkt);
+                self.broadcast_packet_local(pkt);
             }
             BusAddress::Addr(ref addr) => {
                 self.send_to(pkt, addr);
+            }
+            invalid_addr => {
+                println!("Warn: Invalid dst addr type: {:?}", invalid_addr);
             }
         }
     }
@@ -83,30 +93,61 @@ impl<T: Clone + Debug> Bus<T> {
                 peer.bus_send(pkt);
             }
             None => {
-                if let Some(gateway) = &self.gateway {
-                    self.send_to(pkt, gateway);
-                }
+                self.send_to_no_local(pkt);
             }
         }
     }
 
-    fn get_endpoint_by_addr(&self, addr: &Address) -> Option<&Endpoint<T>> {
-        self.endpoints.get(addr)
+    fn send_to_no_local(&self, pkt: Packet<T>) {
+        let pkt_src = pkt.src.clone();
+
+        match pkt_src {
+            BusAddress::Addr(_) => {
+                if let Some(gateway) = &self.gateway {
+                    self.send_to(pkt, gateway);
+                }
+            }
+            BusAddress::Router(ref rt_addr) => {
+                self.broadcast_to_routers(pkt, rt_addr.rt_addr());
+            }
+            _ => {}
+        }
     }
 
-    fn broadcast_packet(&self, packet: Packet<T>) {
-        let src_addr = match packet.src {
+    fn broadcast_to_routers(&self, pkt: Packet<T>, last: &Address) {
+        let eps = self
+            .endpoints
+            .iter()
+            .filter(|(addr, _)| *addr != last)
+            .map(|(_, peer)| peer)
+            .collect::<Vec<_>>();
+
+        self.broadcast_packet(pkt, eps);
+    }
+
+    fn broadcast_packet(&self, pkt: Packet<T>, endpoints: Vec<&Endpoint<T>>) {
+        endpoints.into_iter().for_each(|peer| {
+            peer.bus_send(pkt.clone());
+        })
+    }
+
+    fn broadcast_packet_local(&self, pkt: Packet<T>) {
+        let src_addr = match pkt.src {
             BusAddress::Addr(ref addr) => addr,
             _ => return,
         };
 
-        self.endpoints
+        let iter = self
+            .endpoints
             .iter()
             .filter(|(addr, _)| *addr != src_addr)
-            .for_each(|(_, peer)| {
-                let mut packet = packet.clone();
-                packet.dst = peer.addr.clone();
-                peer.bus_send(packet);
-            });
+            .map(|(_, peer)| peer)
+            .collect::<Vec<_>>();
+
+        self.broadcast_packet(pkt, iter);
+    }
+
+    fn get_endpoint_by_addr(&self, addr: &Address) -> Option<&Endpoint<T>> {
+        self.endpoints.get(addr)
     }
 }

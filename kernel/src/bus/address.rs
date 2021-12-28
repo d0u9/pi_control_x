@@ -12,7 +12,20 @@ impl Address {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub(super) struct RouterAddr {
+    last_router: Address,
+    src: Address,
+}
+
+impl RouterAddr {
+    pub(super) fn rt_addr(&self) -> &Address {
+        &self.last_router
+    }
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub(super) enum BusAddress {
     Broadcast,
     Addr(Address),
+    Router(RouterAddr),
 }
