@@ -10,5 +10,8 @@ pub use endpoint::*;
 pub mod address;
 pub use address::*;
 
+mod policy;
+use policy::*;
+
 #[cfg(test)]
 mod mod_test;
