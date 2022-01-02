@@ -4,6 +4,7 @@ use ::tokio::sync::mpsc;
 
 use super::policy::Policy;
 use super::endpoint::Endpoint;
+use super::address::{BusAddress, RouterAddr};
 
 #[derive(Debug, Clone)]
 pub enum RouterMode {
@@ -56,6 +57,32 @@ where
                     break;
                 }
             }
+        }
+    }
+
+    // TODO: 
+    fn update_src_addr(src: &BusAddress, send_endpoint: &BusAddress) -> Option<BusAddress> {
+        let send_endpoint_addr = match send_endpoint {
+            BusAddress::Broadcast | BusAddress::Router(_) => {
+                return None;
+            }
+            BusAddress::Addr(addr) => { addr }
+        };
+
+
+        match src {
+            BusAddress::Broadcast => {
+                println!("Src address is Broadcast, drop!");
+                None
+            }
+            BusAddress::Addr(addr) => {
+                Some(BusAddress::Router(RouterAddr::new(send_endpoint_addr, addr)))
+            },
+            BusAddress::Router(addr) => {
+                let mut addr = addr.clone();
+                addr.set_last_router(send_endpoint_addr);
+                Some(BusAddress::Router(addr.clone()))
+            },
         }
     }
 }

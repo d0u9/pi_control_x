@@ -106,11 +106,13 @@ impl<T: Clone + Debug> Bus<T> {
         let pkt_src = pkt.src.clone();
 
         match pkt_src {
+            // Sent from bus internal
             BusAddress::Addr(_) => {
                 if let Some(gateway) = &self.gateway {
                     self.send_to(pkt, gateway);
                 }
             }
+            // Sent from router
             BusAddress::Router(ref rt_addr) => {
                 self.broadcast_to_routers(pkt, rt_addr.rt_addr());
             }
