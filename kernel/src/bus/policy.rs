@@ -1,6 +1,8 @@
 use ::std::fmt::Debug;
 
-use super::*;
+use super::endpoint::Packet;
+use super::address::BusAddress;
+use super::router::RouterMode;
 
 #[derive(Debug)]
 pub(super) struct Policy {

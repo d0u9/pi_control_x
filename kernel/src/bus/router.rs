@@ -2,7 +2,8 @@ use ::std::fmt::Debug;
 use ::std::marker::PhantomData;
 use ::tokio::sync::mpsc;
 
-use super::*;
+use super::policy::Policy;
+use super::endpoint::Endpoint;
 
 #[derive(Debug, Clone)]
 pub enum RouterMode {

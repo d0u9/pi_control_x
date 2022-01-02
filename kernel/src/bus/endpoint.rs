@@ -1,7 +1,7 @@
 use ::std::fmt::Debug;
 use ::tokio::sync::broadcast;
 
-use super::*;
+use super::address::{BusAddress, Address};
 
 pub(super) type TxPin<T> = broadcast::Sender<Packet<T>>;
 pub(super) type RxPin<T> = broadcast::Receiver<Packet<T>>;

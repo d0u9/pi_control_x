@@ -1,5 +1,7 @@
 #[cfg(test)]
-use super::*;
+use super::router::*;
+use super::bus::*;
+use super::address::*;
 
 use ::futures::future::FutureExt;
 use ::tokio::time::Duration;

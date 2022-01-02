@@ -3,7 +3,9 @@ use ::std::collections::HashMap;
 use ::std::fmt::Debug;
 use ::std::future::Future;
 
-use super::*;
+use super::address::{BusAddress, Address};
+use super::endpoint::Packet;
+use super::endpoint::Endpoint;
 
 #[derive(Debug)]
 pub struct Bus<T> {
@@ -31,7 +33,9 @@ impl<T: Clone + Debug> Bus<T> {
     }
 
     pub fn set_gateway(&mut self, addr: &Address) {
-        // TODO: test if addr is valid
+        if self.endpoints.get(addr).is_none() {
+            return;
+        }
         let addr = (*addr).clone();
         self.gateway = Some(addr);
     }
