@@ -1,16 +1,10 @@
-pub mod bus;
-pub use bus::Bus;
+mod error;
+pub use error::*;
 
-pub mod router;
-pub use router::Router;
-
-pub mod endpoint;
-pub use endpoint::Endpoint;
-
-pub mod address;
-pub use address::Address;
-
-mod policy;
+mod wire;
+mod switch;
+mod address;
+mod packet;
 
 #[cfg(test)]
 mod mod_test;

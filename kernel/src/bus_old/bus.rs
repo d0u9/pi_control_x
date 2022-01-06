@@ -65,6 +65,7 @@ impl<T: Clone + Debug> Bus<T> {
                 (Ok(pkt), _, _) => {
                     self.process_pkt(pkt);
                 }
+                (Err(
                 _ => {}
             }
         }
