@@ -5,6 +5,9 @@ use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
 use uuid::Uuid;
 
+use super::packet::Packet;
+use super::address::Address;
+
 type RawRx<T> = broadcast::Receiver<T>;
 type RawTx<T> = broadcast::Sender<T>;
 
@@ -17,11 +20,11 @@ pub enum EndpointError {
 pub struct Rx<T> {
     wire: Uuid,
     peer: Uuid,
-    rx: RawRx<T>,
+    rx: RawRx<Packet<T>>,
 }
 
 impl<T: Debug + Clone> Rx<T> {
-    pub async fn recv(&mut self) -> Result<T, EndpointError> {
+    pub async fn recv(&mut self) -> Result<Packet<T>, EndpointError> {
         loop {
             match self.rx.recv().await {
                 Ok(val) => return Ok(val),
@@ -39,12 +42,17 @@ impl<T: Debug + Clone> Rx<T> {
 pub struct Tx<T> {
     wire: Uuid,
     peer: Uuid,
-    tx: RawTx<T>,
+    tx: RawTx<Packet<T>>,
 }
 
 impl<T: Debug + Clone> Tx<T> {
-    pub fn send(&self, val: T) {
-        self.tx.send(val).expect("send failed");
+    pub fn send(&self, daddr: Address, val: T) {
+        let pkt = Packet::new(daddr, val);
+        self.tx.send(pkt).expect("send failed");
+    }
+
+    pub fn send_pkt(&self, pkt: Packet<T>) {
+        self.tx.send(pkt).expect("send failed");
     }
 }
 
@@ -52,8 +60,8 @@ impl<T: Debug + Clone> Tx<T> {
 pub struct Endpoint<T> {
     peer: Uuid,
     wire: Uuid,
-    tx_this: RawTx<T>,
-    tx_that: RawTx<T>,
+    tx_this: RawTx<Packet<T>>,
+    tx_that: RawTx<Packet<T>>,
 }
 
 impl<T: Clone + Debug> Endpoint<T> {

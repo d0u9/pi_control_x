@@ -1,11 +1,13 @@
 use std::fmt::Debug;
 use std::collections::HashMap;
 use std::future::Future;
+use std::default::Default;
 
 use log::trace;
 
-use super::wire::{Rx, Tx, Endpoint, EndpointError};
+use super::wire::{Rx, Tx, Endpoint};
 use super::address::Address;
+use super::packet::Packet;
 
 #[derive(Debug)]
 pub enum SwitchError {
@@ -28,23 +30,57 @@ impl<T: Debug + Clone> Builder<T> {
     }
 
     pub fn done(self) -> Switch<T> {
-        let (txs, rxs): (HashMap<Address, Tx<T>>, Vec<Rx<T>>) = self.endpoints.into_iter()
-            .map(|(key, val)| {
-                let (tx, rx) = val.split();
-                ((key, tx), rx)
-            })
-            .unzip();
+        let ports = self.endpoints.into_iter()
+            .map(|(addr, endpoint)| {
+                let (tx, rx) = endpoint.split();
+                let port = Port {
+                    addr: addr.clone(),
+                    tx,
+                    rx,
+                };
+                (addr, port)
+            }).collect::<HashMap<_, _>>();
 
         Switch {
-            txs,
-            rxs,
+            ports,
         }
     }
 }
 
+enum PollResult<T> {
+    Packet(Packet<T>),
+    Closed,
+}
+
+
+#[derive(Debug)]
+struct Port<T> {
+    addr: Address,
+    rx: Rx<T>,
+    tx: Tx<T>,
+}
+
+impl<T: Clone + Debug> Port<T> {
+    async fn poll(&mut self) -> (&Self, PollResult<T>) {
+        let result = match self.rx.recv().await {
+            Ok(v) => { PollResult::Packet(v) }
+            Err(_) => { PollResult::Closed }
+        };
+
+        (self, result)
+    }
+
+    fn addr(&self) -> Address {
+        self.addr.clone()
+    }
+
+    fn send(&self, val: Packet<T>) {
+        self.tx.send_pkt(val);
+    }
+}
+
 pub struct Switch<T> {
-    txs: HashMap<Address, Tx<T>>,
-    rxs: Vec<Rx<T>>,
+    ports: HashMap<Address, Port<T>>,
 }
 
 impl<T: Clone + Debug> Switch<T> {
@@ -54,32 +90,29 @@ impl<T: Clone + Debug> Switch<T> {
         }
     }
 
-    async fn inner_poll(self) {
-        let Self {
-            mut rxs,
-            ..
-        } = self;
-
-        let mut last_closed = Option::<usize>::None;
+    async fn inner_poll(mut self) {
         loop {
-            {
-                let pin_futures = rxs.iter_mut().map(|rx| Box::pin(rx.recv())).collect::<Vec<_>>();
+            let (ready_port, poll_result) = {
+                let pin_futures = self.ports.iter_mut().map(|(_, port)| Box::pin(port.poll()));
                 match futures::future::select_all(pin_futures).await {
-                    (Ok(pkt), _, _) => {
-                        trace!("switch receives {:?}", pkt);
+                    ((port, result), _, _) => {
+                        (port, result)
                     }
-                    (Err(EndpointError::Closed), i, _) => {
-                        last_closed = Some(i);
-                    }
-                };
+                }
+            };
+
+            let ready_addr = ready_port.addr();
+            if let PollResult::Packet(mut pkt) = poll_result {
+                trace!("New data arrivas at port ({}): {:?}", ready_addr, pkt);
+                // Process received packet
+                pkt.set_saddr(ready_addr.clone());
+                self.process_pkt(pkt);
+            } else {
+                trace!("Port ({}) is closed", ready_addr);
+                self.ports.remove(&ready_addr);
             }
-            if let Some(idx) = last_closed {
-                rxs = rxs.into_iter().enumerate().filter(|(i, _)| *i != idx).map(|(_, val)| val).collect::<Vec<_>>();
-            }
-            last_closed = Option::<usize>::None;
         }
     }
-
 
     pub async fn poll(self, shutdown: impl Future<Output=()>) {
         tokio::select! {
@@ -87,6 +120,29 @@ impl<T: Clone + Debug> Switch<T> {
                 trace!("switch receives shutdown signal");
             },
             _ = self.inner_poll() => { },
+        }
+    }
+
+    fn process_pkt(&self, pkt: Packet<T>) {
+        let saddr = match pkt.ref_saddr() {
+            Some(saddr) => saddr.to_owned(),
+            None => {
+                trace!("[Bug] pkt has no saddr: {:?}", pkt);
+                return ();
+            }
+        };
+
+        let daddr = pkt.ref_daddr();
+        // check if daddr is broadcast addr
+
+        let peer = self.ports.get(daddr);
+        match peer {
+            Some(peer) => peer.send(pkt),
+            None => {
+                trace!("Cannot find addr({}) in local, drop", daddr);
+                trace!("current ports: {:?}", self.ports);
+                return ();
+            }
         }
     }
 }
