@@ -12,7 +12,7 @@ use super::address::*;
 use super::packet::*;
 
 #[test(tokio::test)]
-async fn hello_test() {
+async fn switch_basic_test() {
 
     let (epa0, epa1) = Wire::new::<u32>();
     let (epb0, epb1) = Wire::new::<u32>();
@@ -53,4 +53,56 @@ async fn hello_test() {
     join.await.expect("join failed");
 }
 
+#[test(tokio::test)]
+async fn switch_broadcast_test() {
+    let (epa0, epa1) = Wire::new::<u32>();
+    let (epb0, epb1) = Wire::new::<u32>();
+    let (epc0, epc1) = Wire::new::<u32>();
 
+    let a_addr = Address::new("addr_a");
+    let b_addr = Address::new("addr_b");
+    let c_addr = Address::new("addr_c");
+
+    let switch = Switch::<u32>::builder()
+        .attach(a_addr.clone(), epa0)
+        .expect("attach endpoint failed")
+        .attach(b_addr.clone(), epb0)
+        .expect("attach endpoint failed")
+        .attach(c_addr.clone(), epc0)
+        .expect("attach endpoint failed")
+        .done();
+
+    let (shut_tx, mut shut_rx) = mpsc::channel::<()>(1);
+    let join = tokio::spawn(async move {
+        switch.poll(shut_rx.recv().map(|_|())).await;
+    });
+
+    time::sleep(Duration::from_millis(10)).await;
+
+    let (a_tx, mut a_rx) = epa1.split();
+    let (b_tx, _) = epb1.split();
+    let (c_tx, mut c_rx) = epc1.split();
+    b_tx.send(Address::Broadcast, 0xdeadbeef);
+
+    let mut target_pkt = Packet::new(Address::Broadcast, 0xdeadbeef_u32);
+    target_pkt.set_saddr(b_addr.clone());
+
+    let a_recv_pkt = a_rx.recv().await.expect("a_rx received failed");
+    let c_recv_pkt = c_rx.recv().await.expect("b_rx received failed");
+
+    assert_eq!(a_recv_pkt.ref_daddr(), &Address::Broadcast);
+    assert_eq!(a_recv_pkt.ref_saddr(), target_pkt.ref_saddr());
+    assert_eq!(a_recv_pkt.ref_val(), target_pkt.ref_val());
+
+    assert_eq!(c_recv_pkt.ref_daddr(), &Address::Broadcast);
+    assert_eq!(c_recv_pkt.ref_saddr(), target_pkt.ref_saddr());
+    assert_eq!(c_recv_pkt.ref_val(), target_pkt.ref_val());
+
+    let _make_a_tx_live_long_enough = b_tx;
+    let _make_c_tx_live_long_enough = c_tx;
+
+    time::sleep(Duration::from_millis(10)).await;
+    shut_tx.send(()).await.expect("Send shutdown signal failed");
+
+    join.await.expect("join failed");
+}

@@ -1,21 +1,23 @@
 use std::fmt::Display;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct Address {
-    inner: String,
+pub enum Address {
+    Broadcast,
+    Addr(String),
 }
 
 impl Address {
     pub fn new(name: &str) -> Self {
-        Self {
-            inner: name.to_owned(),
-        }
+        Address::Addr(name.to_owned())
     }
 }
 
 
 impl Display for Address {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.inner)
+        match self {
+            Self::Broadcast => writeln!(f, "BROADCAST"),
+            Self::Addr(addr) => write!(f, "{}", addr)
+        }
     }
 }

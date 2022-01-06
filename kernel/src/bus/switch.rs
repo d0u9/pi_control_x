@@ -11,6 +11,7 @@ use super::packet::Packet;
 
 #[derive(Debug)]
 pub enum SwitchError {
+    AddressInvalid,
     AddressInUsed,
 }
 
@@ -20,6 +21,10 @@ pub struct Builder<T> {
 
 impl<T: Debug + Clone> Builder<T> {
     pub fn attach(mut self, addr: Address, endpoint: Endpoint<T>) -> Result<Self, SwitchError> {
+        if let Address::Broadcast = addr {
+            return Err(SwitchError::AddressInvalid);
+        }
+
         if self.endpoints.get(&addr).is_some() {
             return Err(SwitchError::AddressInUsed);
         }
@@ -133,7 +138,17 @@ impl<T: Clone + Debug> Switch<T> {
         };
 
         let daddr = pkt.ref_daddr();
-        // check if daddr is broadcast addr
+        if let Address::Broadcast = daddr {
+            trace!("Braodcast pkt: {:?}", pkt);
+            self.ports.iter()
+                .filter(|(addr, _)| *addr != &saddr)
+                .map(|(_, port)| port)
+                .for_each(|port| {
+                    port.send(pkt.clone());
+                });
+
+            return ();
+        }
 
         let peer = self.ports.get(daddr);
         match peer {
