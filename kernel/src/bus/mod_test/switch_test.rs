@@ -14,8 +14,8 @@ use super::packet::*;
 #[test(tokio::test)]
 async fn switch_basic_test() {
 
-    let (epa0, epa1) = Wire::new::<u32>();
-    let (epb0, epb1) = Wire::new::<u32>();
+    let (epa0, epa1) = Wire::endpoints::<u32>();
+    let (epb0, epb1) = Wire::endpoints::<u32>();
 
     let saddr = Address::new("addr_src");
     let daddr = Address::new("addr_dst");
@@ -55,9 +55,9 @@ async fn switch_basic_test() {
 
 #[test(tokio::test)]
 async fn switch_broadcast_test() {
-    let (epa0, epa1) = Wire::new::<u32>();
-    let (epb0, epb1) = Wire::new::<u32>();
-    let (epc0, epc1) = Wire::new::<u32>();
+    let (epa0, epa1) = Wire::endpoints::<u32>();
+    let (epb0, epb1) = Wire::endpoints::<u32>();
+    let (epc0, epc1) = Wire::endpoints::<u32>();
 
     let a_addr = Address::new("addr_a");
     let b_addr = Address::new("addr_b");
@@ -98,7 +98,7 @@ async fn switch_broadcast_test() {
     assert_eq!(c_recv_pkt.ref_saddr(), target_pkt.ref_saddr());
     assert_eq!(c_recv_pkt.ref_val(), target_pkt.ref_val());
 
-    let _make_a_tx_live_long_enough = b_tx;
+    let _make_a_tx_live_long_enough = a_tx;
     let _make_c_tx_live_long_enough = c_tx;
 
     time::sleep(Duration::from_millis(10)).await;

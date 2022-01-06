@@ -1,3 +1,4 @@
+#![cfg(test)]
 mod error;
 pub use error::*;
 

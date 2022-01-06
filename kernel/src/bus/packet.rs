@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 
 use super::address::Address;
+use super::wire::Rx;
 
 #[derive(Debug, Clone)]
 pub struct Packet<T> {
@@ -50,3 +51,4 @@ impl<T: Clone + Debug> Packet<T> {
         self.val
     }
 }
+

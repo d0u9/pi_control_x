@@ -85,11 +85,11 @@ impl<T: Clone + Debug> Endpoint<T> {
 pub struct Wire;
 
 impl Wire {
-    pub fn new<T: Debug + Clone>() -> (Endpoint<T>, Endpoint<T>) {
+    pub fn endpoints<T: Debug + Clone>() -> (Endpoint<T>, Endpoint<T>) {
         let (tx0, _) = broadcast::channel(16);
         let (tx1, _) = broadcast::channel(16);
         let wire0 = Uuid::new_v4();
-        let wire1 = wire0.clone();
+        let wire1 = wire0;
 
         let ep0 = Endpoint {
             peer: Uuid::new_v4(),

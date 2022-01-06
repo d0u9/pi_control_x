@@ -29,7 +29,7 @@ impl<T: Debug + Clone> Builder<T> {
             return Err(SwitchError::AddressInUsed);
         }
 
-        self.endpoints.insert(addr.clone(), endpoint);
+        self.endpoints.insert(addr, endpoint);
 
         Ok(self)
     }
