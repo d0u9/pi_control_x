@@ -1,13 +1,13 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::default::Default;
 use std::fmt::Debug;
 use std::future::Future;
 
-use log::{warn, info, trace};
+use log::{info, trace, warn};
 use uuid::Uuid;
 
 use super::address::Address;
-use super::packet::Packet;
+use super::packet::{Packet, RouteInfo};
 use super::wire::{Endpoint, Rx, Tx};
 
 #[derive(Debug)]
@@ -68,6 +68,7 @@ impl<T: Debug + Clone> Builder<T> {
                     addr: addr.clone(),
                     tx,
                     rx,
+                    simplex: false,
                 };
                 (addr, port)
             })
@@ -111,8 +112,8 @@ impl<T: Debug + Clone> Builder<T> {
 }
 
 enum PollResult<T> {
-    Packet(Packet<T>),
-    Closed,
+    Ok(Packet<T>),
+    Simplex,
 }
 
 #[derive(Debug)]
@@ -121,22 +122,23 @@ struct Port<T> {
     addr: Address,
     rx: Rx<T>,
     tx: Tx<T>,
+    simplex: bool,
 }
 
 impl<T: Clone + Debug> Port<T> {
-    async fn poll(&mut self) -> (&Self, PollResult<T>) {
+    async fn poll(&mut self) -> (Address, PollResult<T>) {
         let result = match self.rx.recv().await {
             Ok(pkt) => {
                 trace!("[Port({:?})] Receives new packet: {:?}", self.addr, pkt);
-                PollResult::Packet(pkt)
+                PollResult::Ok(pkt)
             }
-            Err(_) => PollResult::Closed,
+            Err(_) => PollResult::Simplex,
         };
 
-        (self, result)
+        (self.get_addr(), result)
     }
 
-    fn addr(&self) -> Address {
+    fn get_addr(&self) -> Address {
         self.addr.clone()
     }
 
@@ -144,13 +146,17 @@ impl<T: Clone + Debug> Port<T> {
         trace!("[Port({:?})] Sent packet: {:?}", self.addr, pkt);
         self.tx.send_pkt(pkt);
     }
+
+    fn set_to_simplex(&mut self) {
+        self.simplex = true;
+    }
 }
 
 pub struct Switch<T> {
     name: String,
     uuid: Uuid,
     ports: HashMap<Address, Port<T>>,
-    router_addrs: Vec<Address>,
+    router_addrs: HashSet<Address>,
     gateway: Option<Address>,
 }
 
@@ -175,21 +181,53 @@ impl<T: Clone + Debug> Switch<T> {
 
     async fn inner_poll(mut self) {
         loop {
-            let (ready_port, poll_result) = {
-                let pin_futures = self.ports.iter_mut().map(|(_, port)| Box::pin(port.poll()));
-                let ((port, result), _, _) = futures::future::select_all(pin_futures).await;
-                (port, result)
-            };
+            let pin_futures = self
+                .ports
+                .iter_mut()
+                .filter(|(_, port)| !port.simplex)
+                .map(|(_, port)| Box::pin(port.poll()));
 
-            let ready_addr = ready_port.addr();
-            if let PollResult::Packet(mut pkt) = poll_result {
-                trace!("[Switch({})] New data arrivas at port ({}): {:?}", self.uuid, ready_addr, pkt);
+            let ((ready_addr, poll_result), _, _) = futures::future::select_all(pin_futures).await;
+
+            if let PollResult::Ok(mut pkt) = poll_result {
+                trace!(
+                    "[Switch({})] New data arrivas at port ({}): {:?}",
+                    self.uuid,
+                    ready_addr,
+                    pkt
+                );
                 // Process received packet
-                pkt.set_saddr(ready_addr.clone());
+                self.tag_rt_info(&mut pkt, &ready_addr);
                 self.switch(&ready_addr, pkt);
             } else {
                 trace!("[Switch({})] Port ({}) is closed", self.uuid, ready_addr);
-                self.ports.remove(&ready_addr);
+                if let Some(port) = self.ports.get_mut(&ready_addr) {
+                    port.set_to_simplex();
+                } else {
+                    warn!("[BUG::Swich] Cannot find a polled port!");
+                }
+            }
+        }
+    }
+
+    fn tag_rt_info(&self, pkt: &mut Packet<T>, ready_addr: &Address) {
+        match self.router_addrs.get(ready_addr) {
+            None => {
+                // Received from normal endpoint
+                pkt.set_saddr(ready_addr.to_owned());
+            }
+            Some(_) => {
+                // Received from a router
+                match pkt.ref_mut_rt_info() {
+                    Some(rt_info) => {
+                        rt_info.last_hop = ready_addr.to_owned();
+                    }
+                    None => {
+                        pkt.set_rt_info(RouteInfo {
+                            last_hop: ready_addr.to_owned(),
+                        });
+                    }
+                }
             }
         }
     }
@@ -224,7 +262,11 @@ impl<T: Clone + Debug> Switch<T> {
         let dst_port = self.ports.get(ref_daddr);
 
         if let Some(port) = dst_port {
-            trace!("[Switch({})] Packet is sent to local port: {:?}", self.uuid, port.addr);
+            trace!(
+                "[Switch({})] Packet is sent to local port: {:?}",
+                self.uuid,
+                port.addr
+            );
             port.send(pkt);
         } else {
             // route or drop
@@ -244,7 +286,11 @@ impl<T: Clone + Debug> Switch<T> {
                         return;
                     }
                     Some(ref gateway) => {
-                        trace!("[Switch({})] Not a local packet, sent to gateway({})", self.uuid, gateway);
+                        trace!(
+                            "[Switch({})] Not a local packet, sent to gateway({})",
+                            self.uuid,
+                            gateway
+                        );
                         vec![gateway]
                     }
                 }
@@ -260,7 +306,10 @@ impl<T: Clone + Debug> Switch<T> {
             let port = self.ports.get(addr);
             match port {
                 None => {
-                    warn!("[BUG::Swich] Addr {:?} should be bound to a port, but not", addr);
+                    warn!(
+                        "[BUG::Swich] Addr {:?} should be bound to a port, but not",
+                        addr
+                    );
                 }
                 Some(port) => {
                     if !port.is_router {
@@ -275,10 +324,9 @@ impl<T: Clone + Debug> Switch<T> {
 
 impl<T: Debug + Clone> Debug for Switch<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let router_addrs = self
-            .router_addrs
-            .iter()
-            .fold(String::new(), |msg, addr| format!("{}\t\t{:?}\n", msg, addr));
+        let router_addrs = self.router_addrs.iter().fold(String::new(), |msg, addr| {
+            format!("{}\t\t{:?}\n", msg, addr)
+        });
         let ports = self.ports.iter().fold(String::new(), |msg, (addr, port)| {
             format!(
                 "{}\t\t[Addr: {:?}, IsRouter: {:?}, WireId: {}, RxPeerId: {}, TxPeerId: {}]\n",

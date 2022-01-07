@@ -1,8 +1,8 @@
 use std::convert::From;
 use std::fmt::Debug;
 
-use log::trace;
 use futures::Future;
+use log::trace;
 use uuid::Uuid;
 
 use super::packet::Packet;
@@ -12,7 +12,6 @@ use super::wire::{Endpoint, Tx};
 pub enum RouterError {
     BuildError,
 }
-
 pub struct Builder<U, V> {
     name: String,
     ep0: Option<Endpoint<U>>,
@@ -54,8 +53,6 @@ where
     }
 }
 
-
-
 #[derive(Debug)]
 pub struct Router<U, V> {
     uuid: Uuid,
@@ -90,6 +87,7 @@ where
     async fn inner_poll(self) {
         let (tx0, mut rx0) = self.ep0.split();
         let (tx1, mut rx1) = self.ep1.split();
+        trace!("[Router({})] Start polling...", self.uuid);
         loop {
             tokio::select! {
                 Ok(pkt) = rx0.recv() => {

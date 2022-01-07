@@ -68,6 +68,14 @@ impl<T: Clone + Debug> Packet<T> {
     pub(super) fn ref_rt_info(&self) -> &Option<RouteInfo> {
         &self.rt_info
     }
+
+    pub(super) fn ref_mut_rt_info(&mut self) -> &mut Option<RouteInfo> {
+        &mut self.rt_info
+    }
+
+    pub(super) fn set_rt_info(&mut self, rt_info: RouteInfo) {
+        self.rt_info = Some(rt_info)
+    }
 }
 
 #[derive(Debug, Clone)]
