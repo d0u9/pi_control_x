@@ -1,13 +1,13 @@
-use futures::future::FutureExt;
 #[cfg(test)]
+use futures::future::FutureExt;
 use std::time::Duration;
 use test_log::test;
 use tokio::sync::mpsc;
 use tokio::time;
 
+#[cfg(test)]
 use super::address::*;
 use super::packet::*;
-#[cfg(test)]
 use super::switch::*;
 use super::wire::*;
 

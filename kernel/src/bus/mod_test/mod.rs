@@ -3,3 +3,4 @@
 pub use super::*;
 
 mod switch_test;
+mod router_test;
