@@ -1,16 +1,16 @@
+use futures::future::FutureExt;
+use std::net::Ipv4Addr;
 #[cfg(test)]
 use std::time::Duration;
 use test_log::test;
-use tokio::time;
 use tokio::sync::broadcast;
-use futures::future::FutureExt;
-use std::net::Ipv4Addr;
+use tokio::time;
 
+use super::address::*;
 #[cfg(test)]
 use super::router::*;
-use super::wire::*;
 use super::switch::*;
-use super::address::*;
+use super::wire::*;
 
 #[test(tokio::test)]
 async fn router_create_test() {
@@ -43,7 +43,7 @@ async fn router_create_test() {
     });
 
     // Sleep a few seconds to wait for system boot up.
-    // time::sleep(Duration::from_millis(10)).await;
+    time::sleep(Duration::from_millis(10)).await;
 
     let send_val = 0xac1097d6_u32;
     let (tx, _) = ep_send0.split();

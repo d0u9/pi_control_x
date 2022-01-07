@@ -9,7 +9,7 @@ pub struct Packet<T> {
     val: T,
     daddr: Address,
     saddr: Option<Address>,
-    rt_info: Option<RouteInfo>
+    rt_info: Option<RouteInfo>,
 }
 
 impl<T: Clone + Debug> Packet<T> {
@@ -74,4 +74,3 @@ impl<T: Clone + Debug> Packet<T> {
 pub struct RouteInfo {
     pub(super) last_hop: Address,
 }
-

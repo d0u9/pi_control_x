@@ -2,5 +2,5 @@
 #[allow(unused_imports)]
 pub use super::*;
 
-mod switch_test;
 mod router_test;
+mod switch_test;

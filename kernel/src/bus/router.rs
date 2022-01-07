@@ -1,11 +1,11 @@
+use log::trace;
 use std::convert::From;
 use std::fmt::Debug;
-use log::trace;
 
 use futures::Future;
 
-use super::wire::{Tx, Endpoint};
 use super::packet::Packet;
+use super::wire::{Endpoint, Tx};
 
 #[derive(Debug)]
 pub struct Router<U, V> {
@@ -25,7 +25,7 @@ where
         }
     }
 
-    pub async fn poll(self, shutdown: impl Future<Output=()>) {
+    pub async fn poll(self, shutdown: impl Future<Output = ()>) {
         tokio::select! {
             _ = shutdown => {
                 trace!("Router receives shutdown signal");
@@ -51,9 +51,9 @@ where
     }
 
     fn route<F, T>(tx: &Tx<T>, pkt: Packet<F>)
-        where
-            F: Clone + Debug,
-            T: Clone + Debug + From<F>
+    where
+        F: Clone + Debug,
+        T: Clone + Debug + From<F>,
     {
         tx.send_pkt(pkt.into());
     }

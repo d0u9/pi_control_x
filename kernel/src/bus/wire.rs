@@ -37,6 +37,14 @@ impl<T: Debug + Clone> Rx<T> {
             }
         }
     }
+
+    pub fn wire_id(&self) -> Uuid {
+        self.wire
+    }
+
+    pub fn peer_id(&self) -> Uuid {
+        self.peer
+    }
 }
 
 #[derive(Debug)]
@@ -56,6 +64,14 @@ impl<T: Debug + Clone> Tx<T> {
         if let Err(e) = self.tx.send(pkt) {
             trace!("Send Packet failed: packet dropped: {:?}", e.0);
         }
+    }
+
+    pub fn wire_id(&self) -> Uuid {
+        self.wire
+    }
+
+    pub fn peer_id(&self) -> Uuid {
+        self.peer
     }
 }
 
