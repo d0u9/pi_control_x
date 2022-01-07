@@ -2,10 +2,10 @@
 mod error;
 pub use error::*;
 
-mod wire;
-mod switch;
 mod address;
 mod packet;
+mod switch;
+mod wire;
 
 #[cfg(test)]
 mod mod_test;

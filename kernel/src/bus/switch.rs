@@ -1,13 +1,13 @@
-use std::fmt::Debug;
 use std::collections::HashMap;
-use std::future::Future;
 use std::default::Default;
+use std::fmt::Debug;
+use std::future::Future;
 
 use log::trace;
 
-use super::wire::{Rx, Tx, Endpoint};
 use super::address::Address;
 use super::packet::Packet;
+use super::wire::{Endpoint, Rx, Tx};
 
 #[derive(Debug)]
 pub enum SwitchError {
@@ -16,7 +16,7 @@ pub enum SwitchError {
 }
 
 pub struct Builder<T> {
-    endpoints: HashMap<Address, Endpoint<T>>
+    endpoints: HashMap<Address, Endpoint<T>>,
 }
 
 impl<T: Debug + Clone> Builder<T> {
@@ -35,7 +35,9 @@ impl<T: Debug + Clone> Builder<T> {
     }
 
     pub fn done(self) -> Switch<T> {
-        let ports = self.endpoints.into_iter()
+        let ports = self
+            .endpoints
+            .into_iter()
             .map(|(addr, endpoint)| {
                 let (tx, rx) = endpoint.split();
                 let port = Port {
@@ -44,11 +46,10 @@ impl<T: Debug + Clone> Builder<T> {
                     rx,
                 };
                 (addr, port)
-            }).collect::<HashMap<_, _>>();
+            })
+            .collect::<HashMap<_, _>>();
 
-        Switch {
-            ports,
-        }
+        Switch { ports }
     }
 }
 
@@ -56,7 +57,6 @@ enum PollResult<T> {
     Packet(Packet<T>),
     Closed,
 }
-
 
 #[derive(Debug)]
 struct Port<T> {
@@ -68,8 +68,8 @@ struct Port<T> {
 impl<T: Clone + Debug> Port<T> {
     async fn poll(&mut self) -> (&Self, PollResult<T>) {
         let result = match self.rx.recv().await {
-            Ok(v) => { PollResult::Packet(v) }
-            Err(_) => { PollResult::Closed }
+            Ok(v) => PollResult::Packet(v),
+            Err(_) => PollResult::Closed,
         };
 
         (self, result)
@@ -99,11 +99,8 @@ impl<T: Clone + Debug> Switch<T> {
         loop {
             let (ready_port, poll_result) = {
                 let pin_futures = self.ports.iter_mut().map(|(_, port)| Box::pin(port.poll()));
-                match futures::future::select_all(pin_futures).await {
-                    ((port, result), _, _) => {
-                        (port, result)
-                    }
-                }
+                let ((port, result), _, _) = futures::future::select_all(pin_futures).await;
+                (port, result)
             };
 
             let ready_addr = ready_port.addr();
@@ -119,7 +116,7 @@ impl<T: Clone + Debug> Switch<T> {
         }
     }
 
-    pub async fn poll(self, shutdown: impl Future<Output=()>) {
+    pub async fn poll(self, shutdown: impl Future<Output = ()>) {
         tokio::select! {
             _ = shutdown => {
                 trace!("switch receives shutdown signal");
@@ -133,21 +130,22 @@ impl<T: Clone + Debug> Switch<T> {
             Some(saddr) => saddr.to_owned(),
             None => {
                 trace!("[Bug] pkt has no saddr: {:?}", pkt);
-                return ();
+                return;
             }
         };
 
         let daddr = pkt.ref_daddr();
         if let Address::Broadcast = daddr {
             trace!("Braodcast pkt: {:?}", pkt);
-            self.ports.iter()
+            self.ports
+                .iter()
                 .filter(|(addr, _)| *addr != &saddr)
                 .map(|(_, port)| port)
                 .for_each(|port| {
                     port.send(pkt.clone());
                 });
 
-            return ();
+            return;
         }
 
         let peer = self.ports.get(daddr);
@@ -156,7 +154,6 @@ impl<T: Clone + Debug> Switch<T> {
             None => {
                 trace!("Cannot find addr({}) in local, drop", daddr);
                 trace!("current ports: {:?}", self.ports);
-                return ();
             }
         }
     }

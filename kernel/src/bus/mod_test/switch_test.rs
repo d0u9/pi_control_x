@@ -1,19 +1,18 @@
+use futures::future::FutureExt;
 #[cfg(test)]
 use std::time::Duration;
 use test_log::test;
-use tokio::time;
 use tokio::sync::mpsc;
-use futures::future::FutureExt;
+use tokio::time;
 
+use super::address::*;
+use super::packet::*;
 #[cfg(test)]
 use super::switch::*;
 use super::wire::*;
-use super::address::*;
-use super::packet::*;
 
 #[test(tokio::test)]
 async fn switch_basic_test() {
-
     let (epa0, epa1) = Wire::endpoints::<u32>();
     let (epb0, epb1) = Wire::endpoints::<u32>();
 
@@ -28,7 +27,7 @@ async fn switch_basic_test() {
 
     let (shut_tx, mut shut_rx) = mpsc::channel::<()>(1);
     let join = tokio::spawn(async move {
-        switch.poll(shut_rx.recv().map(|_|())).await;
+        switch.poll(shut_rx.recv().map(|_| ())).await;
     });
 
     time::sleep(Duration::from_millis(10)).await;
@@ -74,7 +73,7 @@ async fn switch_broadcast_test() {
 
     let (shut_tx, mut shut_rx) = mpsc::channel::<()>(1);
     let join = tokio::spawn(async move {
-        switch.poll(shut_rx.recv().map(|_|())).await;
+        switch.poll(shut_rx.recv().map(|_| ())).await;
     });
 
     time::sleep(Duration::from_millis(10)).await;

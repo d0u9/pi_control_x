@@ -5,8 +5,8 @@ use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
 use uuid::Uuid;
 
-use super::packet::Packet;
 use super::address::Address;
+use super::packet::Packet;
 
 type RawRx<T> = broadcast::Receiver<T>;
 type RawTx<T> = broadcast::Sender<T>;
@@ -67,14 +67,14 @@ pub struct Endpoint<T> {
 impl<T: Clone + Debug> Endpoint<T> {
     pub fn split(self) -> (Tx<T>, Rx<T>) {
         let rx = Rx {
-            wire: self.wire.clone(),
-            peer: self.peer.clone(),
+            wire: self.wire,
+            peer: self.peer,
             rx: self.tx_that.subscribe(),
         };
 
         let tx = Tx {
-            wire: self.wire.clone(),
-            peer: self.peer.clone(),
+            wire: self.wire,
+            peer: self.peer,
             tx: self.tx_this,
         };
 

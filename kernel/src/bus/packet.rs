@@ -51,4 +51,3 @@ impl<T: Clone + Debug> Packet<T> {
         self.val
     }
 }
-

@@ -12,12 +12,11 @@ impl Address {
     }
 }
 
-
 impl Display for Address {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Broadcast => writeln!(f, "BROADCAST"),
-            Self::Addr(addr) => write!(f, "{}", addr)
+            Self::Addr(addr) => write!(f, "{}", addr),
         }
     }
 }
