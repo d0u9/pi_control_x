@@ -30,7 +30,12 @@ async fn router_create_test() {
         .expect("set gateway failed")
         .done();
 
-    let router = Router::new(ep_router_a_1, ep_router_b_1);
+    let router = Router::builder()
+        .set_name("router_create_test")
+        .set_endpoint0(ep_router_a_1)
+        .set_endpoint1(ep_router_b_1)
+        .done()
+        .expect("router build failed");
 
     let (shut_tx, _) = broadcast::channel::<()>(1);
     let mut shut_switch = shut_tx.subscribe();

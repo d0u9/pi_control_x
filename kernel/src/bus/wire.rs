@@ -14,6 +14,7 @@ type RawTx<T> = broadcast::Sender<T>;
 
 #[derive(Debug)]
 pub enum EndpointError {
+    AddressError,
     Closed,
 }
 
@@ -25,7 +26,20 @@ pub struct Rx<T> {
 }
 
 impl<T: Debug + Clone> Rx<T> {
-    pub async fn recv(&mut self) -> Result<Packet<T>, EndpointError> {
+    pub async fn recv_data(&mut self) -> Result<T, EndpointError> {
+        self.recv().await.map(|pkt| pkt.into_val())
+    }
+
+    pub async fn recv_data_addr(&mut self) -> Result<(T, Address, Address), EndpointError> {
+        let pkt = self.recv().await?;
+
+        let saddr = pkt.get_saddr().ok_or(EndpointError::AddressError)?;
+        let daddr = pkt.get_daddr();
+        let val = pkt.into_val();
+        Ok((val, saddr, daddr))
+    }
+
+    pub(super) async fn recv(&mut self) -> Result<Packet<T>, EndpointError> {
         loop {
             match self.rx.recv().await {
                 Ok(val) => {
