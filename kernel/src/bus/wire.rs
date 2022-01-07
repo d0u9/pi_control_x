@@ -28,10 +28,16 @@ impl<T: Debug + Clone> Rx<T> {
     pub async fn recv(&mut self) -> Result<Packet<T>, EndpointError> {
         loop {
             match self.rx.recv().await {
-                Ok(val) => return Ok(val),
-                Err(RecvError::Closed) => return Err(EndpointError::Closed),
+                Ok(val) => {
+                    trace!("[Rx({})] Recieves new packet: {:?}", self.peer, val);
+                    return Ok(val);
+                }
+                Err(RecvError::Closed) => {
+                    trace!("[Rx({})] Is closed", self.peer);
+                    return Err(EndpointError::Closed);
+                }
                 Err(RecvError::Lagged(num)) => {
-                    trace!("Endpoint {} has lagged {} packets, retry", self.peer, num);
+                    trace!("[Rx({})] Has lagged {} packets, retry", self.peer, num);
                     continue;
                 }
             }
@@ -61,6 +67,8 @@ impl<T: Debug + Clone> Tx<T> {
     }
 
     pub fn send_pkt(&self, pkt: Packet<T>) {
+        trace!("[Tx({})] Send packet: {:?}", self.peer, pkt);
+
         if let Err(e) = self.tx.send(pkt) {
             trace!("Send Packet failed: packet dropped: {:?}", e.0);
         }

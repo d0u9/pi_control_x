@@ -3,7 +3,7 @@ use std::default::Default;
 use std::fmt::Debug;
 use std::future::Future;
 
-use log::trace;
+use log::{warn, info, trace};
 use uuid::Uuid;
 
 use super::address::Address;
@@ -45,7 +45,7 @@ impl<T: Debug + Clone> Builder<T> {
         }
     }
 
-    pub fn set_nane(mut self, name: &str) -> Self {
+    pub fn set_name(mut self, name: &str) -> Self {
         self.name = name.to_owned();
         self
     }
@@ -126,7 +126,10 @@ struct Port<T> {
 impl<T: Clone + Debug> Port<T> {
     async fn poll(&mut self) -> (&Self, PollResult<T>) {
         let result = match self.rx.recv().await {
-            Ok(v) => PollResult::Packet(v),
+            Ok(pkt) => {
+                trace!("[Port({:?})] Receives new packet: {:?}", self.addr, pkt);
+                PollResult::Packet(pkt)
+            }
             Err(_) => PollResult::Closed,
         };
 
@@ -137,8 +140,9 @@ impl<T: Clone + Debug> Port<T> {
         self.addr.clone()
     }
 
-    fn send(&self, val: Packet<T>) {
-        self.tx.send_pkt(val);
+    fn send(&self, pkt: Packet<T>) {
+        trace!("[Port({:?})] Sent packet: {:?}", self.addr, pkt);
+        self.tx.send_pkt(pkt);
     }
 }
 
@@ -160,9 +164,10 @@ impl<T: Clone + Debug> Switch<T> {
     }
 
     pub async fn poll(self, shutdown: impl Future<Output = ()>) {
+        let uuid = self.uuid;
         tokio::select! {
             _ = shutdown => {
-                trace!("switch receives shutdown signal");
+                info!("[Switch({})] Switch receives shutdown signal", uuid);
             },
             _ = self.inner_poll() => { },
         }
@@ -219,6 +224,7 @@ impl<T: Clone + Debug> Switch<T> {
         let dst_port = self.ports.get(ref_daddr);
 
         if let Some(port) = dst_port {
+            trace!("[Switch({})] Packet is sent to local port: {:?}", self.uuid, port.addr);
             port.send(pkt);
         } else {
             // route or drop
@@ -234,10 +240,11 @@ impl<T: Clone + Debug> Switch<T> {
                 // default gateway is used if packet is sent from local
                 match self.gateway {
                     None => {
-                        trace!("Packet is not sent to local, and not gateway is specificed, drop");
+                        trace!("[Switch({})] Not a local packet, and not gateway is specificed, drop!!", self.uuid);
                         return;
                     }
                     Some(ref gateway) => {
+                        trace!("[Switch({})] Not a local packet, sent to gateway({})", self.uuid, gateway);
                         vec![gateway]
                     }
                 }
@@ -253,11 +260,11 @@ impl<T: Clone + Debug> Switch<T> {
             let port = self.ports.get(addr);
             match port {
                 None => {
-                    trace!("BUG: route addr is invalid");
+                    warn!("[BUG::Swich] Addr {:?} should be bound to a port, but not", addr);
                 }
                 Some(port) => {
                     if !port.is_router {
-                        trace!("BUG: port is not router");
+                        warn!("[BUG::Swich] Addr {:?} should be a router, but not", addr);
                     }
                     port.send(pkt.clone());
                 }

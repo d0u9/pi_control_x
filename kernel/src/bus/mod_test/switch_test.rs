@@ -23,6 +23,7 @@ async fn switch_basic_test() {
         .expect("attach endpoint failed")
         .attach(daddr.clone(), epb0)
         .expect("switch attach failed")
+        .set_name("switch_basic_test")
         .done();
 
     let (shut_tx, mut shut_rx) = mpsc::channel::<()>(1);
@@ -69,6 +70,7 @@ async fn switch_broadcast_test() {
         .expect("attach endpoint failed")
         .attach(c_addr.clone(), epc0)
         .expect("attach endpoint failed")
+        .set_name("switch_broadcast_test")
         .done();
 
     let (shut_tx, mut shut_rx) = mpsc::channel::<()>(1);
