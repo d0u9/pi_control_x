@@ -1,4 +1,5 @@
 #![cfg_attr(test, allow(dead_code))]
+use std::convert::From;
 use std::fmt::Debug;
 
 use super::address::Address;
@@ -8,14 +9,16 @@ pub struct Packet<T> {
     val: T,
     daddr: Address,
     saddr: Option<Address>,
+    rt_info: Option<RouteInfo>
 }
 
 impl<T: Clone + Debug> Packet<T> {
     pub fn new(daddr: Address, val: T) -> Self {
         Self {
-            saddr: None,
-            daddr,
             val,
+            daddr,
+            saddr: None,
+            rt_info: None,
         }
     }
 
@@ -50,37 +53,25 @@ impl<T: Clone + Debug> Packet<T> {
     pub fn into_val(self) -> T {
         self.val
     }
+
+    pub fn into<U: From<T>>(self) -> Packet<U> {
+        Packet {
+            val: self.val.into(),
+            daddr: self.daddr,
+            saddr: self.saddr,
+            rt_info: self.rt_info,
+        }
+    }
+}
+
+impl<T: Clone + Debug> Packet<T> {
+    pub(super) fn ref_rt_info(&self) -> &Option<RouteInfo> {
+        &self.rt_info
+    }
 }
 
 #[derive(Debug, Clone)]
-pub(super) enum LastHop {
-    Local,
-    Router(Address),
+pub struct RouteInfo {
+    pub(super) last_hop: Address,
 }
 
-#[derive(Clone, Debug)]
-pub(super) struct BusPacket<T> {
-    inner: Packet<T>,
-    last_hop: LastHop,
-}
-
-impl<T: Clone + Debug> BusPacket<T> {
-    pub fn from_local_packet(pkt: Packet<T>) -> Self {
-        Self {
-            inner: pkt,
-            last_hop: LastHop::Local,
-        }
-    }
-
-    pub fn ref_inner(&self) -> &Packet<T> {
-        &self.inner
-    }
-
-    pub fn into_local_packet(self) -> Packet<T> {
-        self.inner
-    }
-
-    pub fn ref_last_hop(&self) -> &LastHop {
-        &self.last_hop
-    }
-}

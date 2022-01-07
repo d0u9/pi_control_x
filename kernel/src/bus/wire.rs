@@ -49,11 +49,13 @@ pub struct Tx<T> {
 impl<T: Debug + Clone> Tx<T> {
     pub fn send(&self, daddr: Address, val: T) {
         let pkt = Packet::new(daddr, val);
-        self.tx.send(pkt).expect("send failed");
+        self.send_pkt(pkt)
     }
 
     pub fn send_pkt(&self, pkt: Packet<T>) {
-        self.tx.send(pkt).expect("send failed");
+        if let Err(e) = self.tx.send(pkt) {
+            trace!("Send Packet failed: packet dropped: {:?}", e.0);
+        }
     }
 }
 

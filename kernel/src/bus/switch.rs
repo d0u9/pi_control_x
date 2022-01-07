@@ -6,7 +6,7 @@ use std::future::Future;
 use log::trace;
 
 use super::address::Address;
-use super::packet::{Packet, BusPacket, LastHop};
+use super::packet::Packet;
 use super::wire::{Endpoint, Rx, Tx};
 
 #[derive(Debug)]
@@ -150,10 +150,7 @@ impl<T: Clone + Debug> Switch<T> {
                 trace!("New data arrivas at port ({}): {:?}", ready_addr, pkt);
                 // Process received packet
                 pkt.set_saddr(ready_addr.clone());
-                // convert local packet to bus packet
-                let pkt = BusPacket::from_local_packet(pkt); 
                 self.switch(&ready_addr, pkt);
-                // self.process_pkt(pkt);
             } else {
                 trace!("Port ({}) is closed", ready_addr);
                 self.ports.remove(&ready_addr);
@@ -161,9 +158,8 @@ impl<T: Clone + Debug> Switch<T> {
         }
     }
 
-    fn switch(&self, saddr: &Address, pkt: BusPacket<T>)  {
-        let ref_inner = pkt.ref_inner();
-        let ref_daddr = ref_inner.ref_daddr();
+    fn switch(&self, saddr: &Address, pkt: Packet<T>)  {
+        let ref_daddr = pkt.ref_daddr();
 
         match ref_daddr {
             Address::Broadcast => {
@@ -175,37 +171,35 @@ impl<T: Clone + Debug> Switch<T> {
         }
     }
 
-    fn broadcast(&self, saddr: &Address, pkt: BusPacket<T>) {
+    fn broadcast(&self, saddr: &Address, pkt: Packet<T>) {
         trace!("Braodcast pkt: {:?}", pkt);
-        let local_pkt = pkt.into_local_packet();
         self.ports
             .iter()
             .filter(|(addr, _)| addr != &saddr)
             .map(|(_, port)| port)
             .for_each(|port| {
-                port.send(local_pkt.clone());
+                port.send(pkt.clone());
         });
     }
 
-    fn send_to(&self, _saddr: &Address, pkt: BusPacket<T>) {
-        let ref_inner = pkt.ref_inner();
-        let ref_daddr = ref_inner.ref_daddr();
+    fn send_to(&self, _saddr: &Address, pkt: Packet<T>) {
+        let ref_daddr = pkt.ref_daddr();
 
         let dst_port = self.ports.get(ref_daddr);
 
         if let Some(port) = dst_port {
-            let local_pkt = pkt.into_local_packet();
-            port.send(local_pkt);
+            port.send(pkt);
         } else {
             // route or drop
             self.route_to(pkt);
         }
     }
 
-    fn route_to(&self, pkt: BusPacket<T>) {
-        let ref_last_hop = pkt.ref_last_hop();
-        let candidates = match ref_last_hop {
-            LastHop::Local => {
+    fn route_to(&self, pkt: Packet<T>) {
+        let rt_info = pkt.ref_rt_info();
+
+        let candidates = match rt_info {
+            None => {
                 // default gateway is used if packet is sent from local
                 match self.gateway {
                     None => {
@@ -216,17 +210,14 @@ impl<T: Clone + Debug> Switch<T> {
                         vec![gateway]
                     }
                 }
-            },
-            LastHop::Router(last_router_addr) => {
-                // Packet is sent from another router and its daddr is not in local
-                // Redirect to all routers
+            }
+            Some(rt_info) => {
                 self.router_addrs.iter()
-                    .filter(|addr| *addr != last_router_addr)
+                    .filter(|&addr| *addr != rt_info.last_hop)
                     .collect::<Vec<_>>()
-            },
+            }
         };
 
-        let local_pkt = pkt.into_local_packet();
         candidates.into_iter().for_each(|addr| {
             let port = self.ports.get(addr);
             match port {
@@ -234,7 +225,10 @@ impl<T: Clone + Debug> Switch<T> {
                     trace!("BUG: route addr is invalid");
                 },
                 Some(port) => {
-                    port.send(local_pkt.clone());
+                    if !port.is_router {
+                        trace!("BUG: port is not router");
+                    }
+                    port.send(pkt.clone());
                 }
             }
         });

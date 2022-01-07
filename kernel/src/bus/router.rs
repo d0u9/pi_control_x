@@ -1,11 +1,16 @@
 use std::convert::From;
 use std::fmt::Debug;
+use log::trace;
 
-use super::wire::Endpoint;
+use futures::Future;
+
+use super::wire::{Tx, Endpoint};
+use super::packet::Packet;
 
 #[derive(Debug)]
 pub struct Router<U, V> {
-    endpoints: (Endpoint<U>, Endpoint<V>),
+    ep0: Endpoint<U>,
+    ep1: Endpoint<V>,
 }
 
 impl<U, V> Router<U, V>
@@ -13,9 +18,43 @@ where
     U: Clone + Debug + From<V>,
     V: Clone + Debug + From<U>,
 {
-    pub fn new(ep0: Endpoint<U>, ep1: Endpoint<V>) -> Self {
+    pub fn new(endpoint0: Endpoint<U>, endpoint1: Endpoint<V>) -> Self {
         Self {
-            endpoints: (ep0, ep1),
+            ep0: endpoint0,
+            ep1: endpoint1,
         }
+    }
+
+    pub async fn poll(self, shutdown: impl Future<Output=()>) {
+        tokio::select! {
+            _ = shutdown => {
+                trace!("Router receives shutdown signal");
+            }
+            _ = self.inner_poll() => {
+            }
+        }
+    }
+
+    async fn inner_poll(self) {
+        let (tx0, mut rx0) = self.ep0.split();
+        let (tx1, mut rx1) = self.ep1.split();
+        loop {
+            tokio::select! {
+                Ok(pkt) = rx0.recv() => {
+                    Self::route(&tx1, pkt);
+                }
+                Ok(pkt) = rx1.recv() => {
+                    Self::route(&tx0, pkt);
+                }
+            }
+        }
+    }
+
+    fn route<F, T>(tx: &Tx<T>, pkt: Packet<F>)
+        where
+            F: Clone + Debug,
+            T: Clone + Debug + From<F>
+    {
+        tx.send_pkt(pkt.into());
     }
 }
