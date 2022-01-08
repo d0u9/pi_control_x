@@ -1,13 +1,13 @@
+#[cfg(test)]
+
 use futures::future::FutureExt;
 use std::net::Ipv4Addr;
-#[cfg(test)]
 use std::time::Duration;
 use test_log::test;
 use tokio::sync::broadcast;
 use tokio::time;
 
 use super::address::*;
-#[cfg(test)]
 use super::router::*;
 use super::switch::*;
 use super::wire::*;

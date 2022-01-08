@@ -4,11 +4,11 @@ use std::fmt::Debug;
 use std::future::Future;
 
 use log::{info, trace, warn};
-use uuid::Uuid;
 
 use super::address::Address;
 use super::packet::{Packet, RouteInfo};
 use super::wire::{Endpoint, Rx, Tx};
+use super::types::DevId;
 
 #[derive(Debug)]
 pub enum SwitchError {
@@ -76,15 +76,15 @@ impl<T: Debug + Clone> Builder<T> {
 
         let switch = Switch {
             name: self.name,
-            uuid: Uuid::new_v4(),
+            id: DevId::new(),
             ports,
             router_addrs,
             gateway: self.gateway,
         };
 
         trace!(
-            "Switch(uuid={},name={}) is initialized: {:?}",
-            &switch.uuid,
+            "Switch(id={},name={}) is initialized: {:?}",
+            &switch.id,
             &switch.name,
             &switch
         );
@@ -153,8 +153,8 @@ impl<T: Clone + Debug> Port<T> {
 }
 
 pub struct Switch<T> {
+    id: DevId,
     name: String,
-    uuid: Uuid,
     ports: HashMap<Address, Port<T>>,
     router_addrs: HashSet<Address>,
     gateway: Option<Address>,
@@ -170,13 +170,37 @@ impl<T: Clone + Debug> Switch<T> {
     }
 
     pub async fn poll(self, shutdown: impl Future<Output = ()>) {
-        let uuid = self.uuid;
+        let id = self.id;
         tokio::select! {
             _ = shutdown => {
-                info!("[Switch({})] Switch receives shutdown signal", uuid);
+                info!("[Switch({})] Switch receives shutdown signal", id);
             },
             _ = self.inner_poll() => { },
         }
+    }
+
+    pub fn get_id(&self) -> DevId {
+        self.id
+    }
+
+    pub fn attach(&mut self, addr: Address, endpoint: Endpoint<T>) -> Result<(), SwitchError> {
+        if self.ports.get(&addr).is_some() {
+            return Err(SwitchError::AddressInUsed);
+        }
+
+        let (tx, rx) = endpoint.split();
+
+        let port = Port {
+            is_router: false,
+            addr: addr.clone(),
+            tx,
+            rx,
+            simplex: false
+        };
+
+        self.ports.insert(addr, port);
+
+        Ok(())
     }
 
     async fn inner_poll(mut self) {
@@ -192,7 +216,7 @@ impl<T: Clone + Debug> Switch<T> {
             if let PollResult::Ok(mut pkt) = poll_result {
                 trace!(
                     "[Switch({})] New data arrivas at port ({}): {:?}",
-                    self.uuid,
+                    self.id,
                     ready_addr,
                     pkt
                 );
@@ -200,7 +224,7 @@ impl<T: Clone + Debug> Switch<T> {
                 self.tag_rt_info(&mut pkt, &ready_addr);
                 self.switch(&ready_addr, pkt);
             } else {
-                trace!("[Switch({})] Port ({}) is closed", self.uuid, ready_addr);
+                trace!("[Switch({})] Port ({}) is closed", self.id, ready_addr);
                 if let Some(port) = self.ports.get_mut(&ready_addr) {
                     port.set_to_simplex();
                 } else {
@@ -246,7 +270,7 @@ impl<T: Clone + Debug> Switch<T> {
     }
 
     fn broadcast(&self, saddr: &Address, pkt: Packet<T>) {
-        trace!("[Switch({})] Braodcast pkt: {:?}", self.uuid, pkt);
+        trace!("[Switch({})] Braodcast pkt: {:?}", self.id, pkt);
         self.ports
             .iter()
             .filter(|(addr, _)| addr != &saddr)
@@ -264,7 +288,7 @@ impl<T: Clone + Debug> Switch<T> {
         if let Some(port) = dst_port {
             trace!(
                 "[Switch({})] Packet is sent to local port: {:?}",
-                self.uuid,
+                self.id,
                 port.addr
             );
             port.send(pkt);
@@ -282,13 +306,13 @@ impl<T: Clone + Debug> Switch<T> {
                 // default gateway is used if packet is sent from local
                 match self.gateway {
                     None => {
-                        trace!("[Switch({})] Not a local packet, and not gateway is specificed, drop!!", self.uuid);
+                        trace!("[Switch({})] Not a local packet, and not gateway is specificed, drop!!", self.id);
                         return;
                     }
                     Some(ref gateway) => {
                         trace!(
                             "[Switch({})] Not a local packet, sent to gateway({})",
-                            self.uuid,
+                            self.id,
                             gateway
                         );
                         vec![gateway]
@@ -340,7 +364,7 @@ impl<T: Debug + Clone> Debug for Switch<T> {
         });
 
         let msg = format!(
-            "Switch [{uuid}] {{\n\
+            "Switch [{id}] {{\n\
              name: {name} \n\
              gateway: {gateway:?} \n\
              router_addrs: \n\
@@ -348,7 +372,7 @@ impl<T: Debug + Clone> Debug for Switch<T> {
              ports: \n\
                 {ports} \n\
             }}",
-            uuid = &self.uuid,
+            id = &self.id,
             name = &self.name,
             gateway = &self.gateway,
             router_addrs = router_addrs,
