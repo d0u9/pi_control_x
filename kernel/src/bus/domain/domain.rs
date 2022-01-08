@@ -11,7 +11,9 @@ use super::super::wire::{Wire, Endpoint};
 use super::super::address::Address;
 
 enum Device {
-    Switch((Box<dyn Any>, Box<dyn Pollable>)),
+    Switch(Box<dyn Any>),
+    Test(Box<dyn Debug>),
+    Test2(Box<dyn Pollable>),
 }
 
 pub struct Domain {
@@ -57,6 +59,7 @@ impl Domain {
                     _ => return Err(DomainError::InvalidHandler),
                 }
             }
+            _ => { }
         }
 
 
@@ -73,7 +76,8 @@ impl Domain {
             .map(|node| node.weight)
             .map(|device| {
                 match device {
-                    Device::Switch(switch) => { switch }
+                    Device::Switch(switch) => {  }
+                    _ => { }
                 }
             })
             .collect::<Vec<_>>();
