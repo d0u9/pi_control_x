@@ -26,7 +26,7 @@ async fn router_create_test() {
         .expect("attach send addr failed")
         .attach_router(router_addr_a.clone(), ep_router_a_0)
         .expect("attach router a failed")
-        .set_gateway(router_addr_a)
+        .set_mode(SwitchMode::Gateway(router_addr_a))
         .expect("set gateway failed")
         .done();
 
@@ -86,7 +86,7 @@ async fn router_two_switch_test() {
         .expect("attach send addr failed")
         .attach_router(router_addr_a.clone(), ep_router_a_0)
         .expect("attach router a failed")
-        .set_gateway(router_addr_a)
+        .set_mode(SwitchMode::Gateway(router_addr_a))
         .expect("set gateway failed")
         .set_name("switch1")
         .done();
@@ -96,7 +96,7 @@ async fn router_two_switch_test() {
         .expect("attach send addr failed")
         .attach_router(router_addr_b.clone(), ep_router_b_0)
         .expect("attach router a failed")
-        .set_gateway(router_addr_b)
+        .set_mode(SwitchMode::Gateway(router_addr_b))
         .expect("set gateway failed")
         .set_name("switch2")
         .done();

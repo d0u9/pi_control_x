@@ -92,6 +92,10 @@ where
         self.id
     }
 
+    pub fn get_name(&self) -> String {
+        self.name.clone()
+    }
+
     async fn inner_poll(self) {
         let (tx0, mut rx0) = self.ep0.split();
         let (tx1, mut rx1) = self.ep1.split();

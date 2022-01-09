@@ -13,16 +13,18 @@ use super::super::switch::*;
 use super::super::wire::{Wire, Endpoint};
 use super::super::address::Address;
 
+#[derive(Debug)]
 enum Device {
     Switch(Box<dyn SwitchDev>),
     Router(Box<dyn RouterDev>),
+    Endpoint(Address),
 }
 
 impl Device {
     fn switch_mut(&mut self) -> Option<&mut Box<dyn SwitchDev>> {
         match self {
             Device::Switch(ref mut switch) => Some(switch),
-            _ => { println!("vvvvvvvv"); None },
+            _ => { None },
         }
     }
 
@@ -51,6 +53,8 @@ impl Domain {
     {
         let switch = Switch::<T>::builder()
                 .set_name(name)
+                .set_mode(SwitchMode::Broadcast)
+                .unwrap()
                 .done();
 
         let switch_id = switch.get_id();
@@ -72,7 +76,7 @@ impl Domain {
             Device::Switch(switch) => {
                 match switch.as_any_mut().downcast_mut::<Switch<T>>() {
                     Some(switch) => {
-                        switch.attach(addr, ep1)?;
+                        switch.attach(addr.clone(), ep1)?;
                     }
                     _ => return Err(DomainError::TypeMismatch),
                 }
@@ -82,10 +86,14 @@ impl Domain {
             }
         }
 
+        let device = Device::Endpoint(addr);
+        let node_id = self.devices.add_node(device);
+        let _edge = self.devices.add_edge(node_id, switch.graph_id, ());
+
         Ok(ep0)
     }
 
-    pub fn join_switches<U, V>(&mut self, switch0: &SwitchHandler, switch1: &SwitchHandler, name: &str) -> Result<(), DomainError>
+    pub fn join_switches<U, V>(&mut self, switch0_handler: &SwitchHandler, switch1_handler: &SwitchHandler, name: &str) -> Result<(), DomainError>
     where
         U: 'static + Clone + Debug + From<V> + Send,
         V: 'static + Clone + Debug + From<U> + Send,
@@ -93,9 +101,9 @@ impl Domain {
         let (ep0s, ep0r) = Wire::endpoints::<U>();
         let (ep1s, ep1r) = Wire::endpoints::<V>();
 
-        {
+        let node0_id = {
             let switch0 = self.devices
-                .node_weight_mut(switch0.graph_id)
+                .node_weight_mut(switch0_handler.graph_id)
                 .ok_or(DomainError::InvalidHandler)?
                 .switch_mut()
                 .ok_or(DomainError::InvalidHandler)?
@@ -104,12 +112,18 @@ impl Domain {
                 .ok_or(DomainError::InvalidHandler)?;
 
 
-            switch0.attach(Address::new(name), ep0s)?;
-        }
+            let addr = Address::new(name);
+            switch0.attach_router(addr.clone(), ep0s)?;
 
-        {
+            let device = Device::Endpoint(addr);
+            let node_id = self.devices.add_node(device);
+            let _edge = self.devices.add_edge(node_id, switch0_handler.graph_id, ());
+            node_id
+        };
+
+        let node1_id = {
             let switch1 = self.devices
-                .node_weight_mut(switch1.graph_id)
+                .node_weight_mut(switch1_handler.graph_id)
                 .ok_or(DomainError::InvalidHandler)?
                 .switch_mut()
                 .ok_or(DomainError::InvalidHandler)?
@@ -118,8 +132,14 @@ impl Domain {
                 .ok_or(DomainError::InvalidHandler)?;
 
 
-            switch1.attach(Address::new(name), ep1s)?;
-        }
+            let addr = Address::new(name);
+            switch1.attach_router(addr.clone(), ep1s)?;
+
+            let device = Device::Endpoint(addr);
+            let node_id = self.devices.add_node(device);
+            let _edge = self.devices.add_edge(node_id, switch1_handler.graph_id, ());
+            node_id
+        };
 
         let router = Router::<U, V>::builder()
             .set_name(name)
@@ -132,10 +152,17 @@ impl Domain {
         let router = Device::Router(Box::new(router));
         let node_id = self.devices.add_node(router);
 
+        let _edge = self.devices.add_edge(node0_id, node_id, ());
+        let _edge = self.devices.add_edge(node1_id, node_id, ());
+
         RouterHandler::new(router_id, node_id);
         Ok(())
     }
 
+    pub fn draw(&self)  {
+        use petgraph::dot::{Dot, Config};
+        println!("{:?}", Dot::with_config(&self.devices, &[Config::EdgeNoLabel]));
+    }
 
     pub fn done(self) -> DomainServer {
         let Self {
@@ -153,6 +180,9 @@ impl Domain {
                     }
                     Device::Router(router) => {
                         Some(router.get_poller())
+                    }
+                    _ => {
+                        None
                     }
                 }
             })

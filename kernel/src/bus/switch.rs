@@ -16,10 +16,20 @@ pub enum SwitchError {
     AddressInUsed,
 }
 
+#[derive(Debug)]
+pub enum SwitchMode {
+    // packets sent not to local switch are directed to the gateway
+    Gateway(Address),
+    // packets sent not to local are broadcasted to all router ports
+    Broadcast,
+    // packets sent not to local are droped.
+    Local,
+}
+
 pub struct Builder<T> {
     // bool = true represents a router
     endpoints: HashMap<Address, (Endpoint<T>, bool)>,
-    gateway: Option<Address>,
+    mode: SwitchMode,
     name: String,
 }
 
@@ -32,7 +42,15 @@ impl<T: Debug + Clone> Builder<T> {
         self.attach_endpoint(addr, endpoint, true)
     }
 
-    pub fn set_gateway(mut self, gateway: Address) -> Result<Self, SwitchError> {
+    pub fn set_mode(mut self, mode: SwitchMode) -> Result<Self, SwitchError> {
+        let gateway = match mode {
+            SwitchMode::Gateway(gateway) => gateway,
+            _ => {
+                self.mode = mode;
+                return Ok(self)
+            },
+        };
+
         let (_, is_router) = self
             .endpoints
             .get(&gateway)
@@ -40,7 +58,7 @@ impl<T: Debug + Clone> Builder<T> {
         if !(*is_router) {
             Err(SwitchError::AddressInvalid)
         } else {
-            self.gateway = Some(gateway);
+            self.mode = SwitchMode::Gateway(gateway);
             Ok(self)
         }
     }
@@ -79,7 +97,7 @@ impl<T: Debug + Clone> Builder<T> {
             id: DevId::new(),
             ports,
             router_addrs,
-            gateway: self.gateway,
+            mode: self.mode,
         };
 
         trace!(
@@ -157,14 +175,14 @@ pub struct Switch<T> {
     name: String,
     ports: HashMap<Address, Port<T>>,
     router_addrs: HashSet<Address>,
-    gateway: Option<Address>,
+    mode: SwitchMode,
 }
 
 impl<T: Clone + Debug> Switch<T> {
     pub fn builder() -> Builder<T> {
         Builder {
             endpoints: HashMap::new(),
-            gateway: None,
+            mode: SwitchMode::Local,
             name: "".to_string(),
         }
     }
@@ -187,7 +205,20 @@ impl<T: Clone + Debug> Switch<T> {
         self.id
     }
 
+    pub fn get_name(&self) -> String {
+        self.name.clone()
+    }
+
+    pub fn attach_router(&mut self, addr: Address, endpoint: Endpoint<T>) -> Result<(), SwitchError> {
+        self.router_addrs.insert(addr.clone());
+        self.attach_endpoint(addr, endpoint, true)
+    }
+
     pub fn attach(&mut self, addr: Address, endpoint: Endpoint<T>) -> Result<(), SwitchError> {
+        self.attach_endpoint(addr, endpoint, false)
+    }
+
+    pub fn attach_endpoint(&mut self, addr: Address, endpoint: Endpoint<T>, is_router: bool) -> Result<(), SwitchError> {
         if self.ports.get(&addr).is_some() {
             return Err(SwitchError::AddressInUsed);
         }
@@ -195,7 +226,7 @@ impl<T: Clone + Debug> Switch<T> {
         let (tx, rx) = endpoint.split();
 
         let port = Port {
-            is_router: false,
+            is_router,
             addr: addr.clone(),
             tx,
             rx,
@@ -308,18 +339,21 @@ impl<T: Clone + Debug> Switch<T> {
         let candidates = match rt_info {
             None => {
                 // default gateway is used if packet is sent from local
-                match self.gateway {
-                    None => {
-                        trace!("[Switch({})] Not a local packet, and not gateway is specificed, drop!!", self.id);
-                        return;
-                    }
-                    Some(ref gateway) => {
+                match self.mode {
+                    SwitchMode::Gateway(ref gateway) => {
                         trace!(
                             "[Switch({})] Not a local packet, sent to gateway({})",
                             self.id,
                             gateway
                         );
                         vec![gateway]
+                    }
+                    SwitchMode::Broadcast => {
+                        self.router_addrs.iter().collect::<Vec<_>>()
+                    }
+                    SwitchMode::Local => {
+                        trace!("[Switch({})] Not a local packet, and not gateway is specificed, drop!!", self.id);
+                        return;
                     }
                 }
             }
@@ -329,6 +363,8 @@ impl<T: Clone + Debug> Switch<T> {
                 .filter(|&addr| *addr != rt_info.last_hop)
                 .collect::<Vec<_>>(),
         };
+
+        trace!("----------- {:?}", candidates);
 
         candidates.into_iter().for_each(|addr| {
             let port = self.ports.get(addr);
@@ -370,7 +406,7 @@ impl<T: Debug + Clone> Debug for Switch<T> {
         let msg = format!(
             "Switch [{id}] {{\n\
              name: {name} \n\
-             gateway: {gateway:?} \n\
+             gateway: {mode:?} \n\
              router_addrs: \n\
                 {router_addrs} \n\
              ports: \n\
@@ -378,7 +414,7 @@ impl<T: Debug + Clone> Debug for Switch<T> {
             }}",
             id = &self.id,
             name = &self.name,
-            gateway = &self.gateway,
+            mode = &self.mode,
             router_addrs = router_addrs,
             ports = ports,
         );
