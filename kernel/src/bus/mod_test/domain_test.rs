@@ -125,8 +125,8 @@ async fn domain_2router_test() {
     let switch4 = domain.add_switch::<u32>("switch4");
 
     let ep1_0 = domain.add_endpoint::<u32>(&switch1, Address::new("switch_ep0")).expect("add_endpoint failed");
-    let ep2_0 = domain.add_endpoint::<Ipv4Addr>(&switch2, Address::new("switch_ep1")).expect("add_endpoint failed");
-    let ep3_0 = domain.add_endpoint::<u32>(&switch3, Address::new("switch_ep2")).expect("add_endpoint failed");
+    let _ep2_0 = domain.add_endpoint::<Ipv4Addr>(&switch2, Address::new("switch_ep1")).expect("add_endpoint failed");
+    let _ep3_0 = domain.add_endpoint::<u32>(&switch3, Address::new("switch_ep2")).expect("add_endpoint failed");
     let ep4_0 = domain.add_endpoint::<u32>(&switch4, Address::new("switch_ep4")).expect("add_endpoint failed");
 
 

@@ -28,6 +28,7 @@ impl Device {
         }
     }
 
+    #[allow(dead_code)]
     fn router_mut(&mut self) -> Option<&mut Box<dyn RouterDev>> {
         match self {
             Device::Router(ref mut router) => Some(router),
@@ -40,6 +41,7 @@ pub struct Domain {
     devices: Graph<Device, (), petgraph::Undirected>,
 }
 
+#[allow(clippy::new_without_default)]
 impl Domain {
     pub fn new() -> Self {
         Self {

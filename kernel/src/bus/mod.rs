@@ -1,13 +1,13 @@
-#![cfg(test)]
+#[allow(dead_code)]
 mod error;
 pub use error::*;
 
-mod address;
-mod packet;
-mod router;
-mod switch;
-mod wire;
-mod domain;
+pub mod address;
+pub mod packet;
+pub mod router;
+pub mod switch;
+pub mod wire;
+pub mod domain;
 
 mod types;
 pub use types::*;

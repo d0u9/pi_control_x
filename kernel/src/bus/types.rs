@@ -13,6 +13,12 @@ impl DevId {
     }
 }
 
+impl Default for DevId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Display for DevId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)

@@ -66,6 +66,6 @@ where
     }
 
     fn get_name(&self) -> String {
-        self.get_name().clone()
+        self.get_name()
     }
 }

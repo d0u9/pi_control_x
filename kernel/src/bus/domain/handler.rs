@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use petgraph::graph::NodeIndex;
 
 use super::super::types::DevId;
@@ -19,14 +21,14 @@ impl SwitchHandler {
 }
 
 pub struct RouterHandler {
-    pub(super) switch_id: DevId,
+    pub(super) router_id: DevId,
     pub(super) graph_id: NodeIndex,
 }
 
 impl RouterHandler {
-    pub fn new(switch_id: DevId, graph_id: NodeIndex) -> Self {
+    pub fn new(router_id: DevId, graph_id: NodeIndex) -> Self {
         Self {
-            switch_id,
+            router_id,
             graph_id,
         }
     }
