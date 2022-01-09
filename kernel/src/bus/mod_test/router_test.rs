@@ -43,7 +43,7 @@ async fn router_create_test() {
     let join_handler = tokio::spawn(async move {
         tokio::select! {
             _ = switch.poll_with_graceful(shut_switch.recv().map(|_|())) => {},
-            _ = router.poll(shut_router.recv().map(|_|())) => {},
+            _ = router.poll_with_graceful(shut_router.recv().map(|_|())) => {},
         }
     });
 
@@ -120,7 +120,7 @@ async fn router_two_switch_test() {
             _ = switch2.poll_with_graceful(shut_switch2.recv().map(|_|())) => {
                 println!("swich2 quit");
             },
-            _ = router.poll(shut_router.recv().map(|_|())) => {
+            _ = router.poll_with_graceful(shut_router.recv().map(|_|())) => {
                 println!("router quit");
             },
         }

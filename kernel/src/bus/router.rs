@@ -3,8 +3,8 @@ use std::fmt::Debug;
 
 use futures::Future;
 use log::trace;
-use uuid::Uuid;
 
+use super::types::DevId;
 use super::packet::Packet;
 use super::wire::{Endpoint, Tx};
 
@@ -43,7 +43,7 @@ where
         let ep1 = self.ep1.ok_or(RouterError::BuildError)?;
 
         let router = Router {
-            uuid: Uuid::new_v4(),
+            id: DevId::new(),
             name: self.name,
             ep0,
             ep1,
@@ -55,7 +55,7 @@ where
 
 #[derive(Debug)]
 pub struct Router<U, V> {
-    uuid: Uuid,
+    id: DevId,
     name: String,
     ep0: Endpoint<U>,
     ep1: Endpoint<V>,
@@ -74,7 +74,11 @@ where
         }
     }
 
-    pub async fn poll(self, shutdown: impl Future<Output = ()>) {
+    pub async fn poll(self) {
+        self.inner_poll().await
+    }
+
+    pub async fn poll_with_graceful(self, shutdown: impl Future<Output = ()>) {
         tokio::select! {
             _ = shutdown => {
                 trace!("Router receives shutdown signal");
@@ -84,18 +88,22 @@ where
         }
     }
 
+    pub fn get_id(&self) -> DevId {
+        self.id
+    }
+
     async fn inner_poll(self) {
         let (tx0, mut rx0) = self.ep0.split();
         let (tx1, mut rx1) = self.ep1.split();
-        trace!("[Router({})] Start polling...", self.uuid);
+        trace!("[Router({})] Start polling...", self.id);
         loop {
             tokio::select! {
                 Ok(pkt) = rx0.recv() => {
-                    trace!("[Router({})] Endpoint0 receives pkt: {:?}", self.uuid, pkt);
+                    trace!("[Router({})] Endpoint0 receives pkt: {:?}", self.id, pkt);
                     Self::route(&tx1, pkt);
                 }
                 Ok(pkt) = rx1.recv() => {
-                    trace!("[Router({})] Endpoint1 receives pkt: {:?}", self.uuid, pkt);
+                    trace!("[Router({})] Endpoint1 receives pkt: {:?}", self.id, pkt);
                     Self::route(&tx0, pkt);
                 }
             }

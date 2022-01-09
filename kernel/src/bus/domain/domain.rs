@@ -1,5 +1,5 @@
 use std::pin::Pin;
-use std::sync::{Arc,Mutex};
+use std::convert::From;
 use std::fmt::Debug;
 use std::future::Future;
 
@@ -8,14 +8,30 @@ use petgraph::graph::Graph;
 use super::handler::*;
 use super::traits::*;
 use super::errors::DomainError;
+use super::super::router::*;
 use super::super::switch::*;
 use super::super::wire::{Wire, Endpoint};
 use super::super::address::Address;
 
 enum Device {
     Switch(Box<dyn SwitchDev>),
-    Test1,
-    Test2
+    Router(Box<dyn RouterDev>),
+}
+
+impl Device {
+    fn switch_mut(&mut self) -> Option<&mut Box<dyn SwitchDev>> {
+        match self {
+            Device::Switch(ref mut switch) => Some(switch),
+            _ => { println!("vvvvvvvv"); None },
+        }
+    }
+
+    fn router_mut(&mut self) -> Option<&mut Box<dyn RouterDev>> {
+        match self {
+            Device::Router(ref mut router) => Some(router),
+            _ => None,
+        }
+    }
 }
 
 pub struct Domain {
@@ -49,8 +65,8 @@ impl Domain {
     where
         T: 'static + Debug + Clone
     {
-        let (ep0, ep1) = Wire::endpoints::<T>();
         let device = self.devices.node_weight_mut(switch.graph_id).ok_or(DomainError::InvalidHandler)?;
+        let (ep0, ep1) = Wire::endpoints::<T>();
 
         match device {
             Device::Switch(switch) => {
@@ -58,19 +74,68 @@ impl Domain {
                     Some(switch) => {
                         switch.attach(addr, ep1)?;
                     }
-                    _ => return Err(DomainError::InvalidHandler),
+                    _ => return Err(DomainError::TypeMismatch),
                 }
             }
-            Device::Test1 => {
-                println!("xx");
-            }
-            _ => { 
+            _ => {
+                    return Err(DomainError::TypeMismatch);
             }
         }
 
-
         Ok(ep0)
     }
+
+    pub fn join_switches<U, V>(&mut self, switch0: &SwitchHandler, switch1: &SwitchHandler, name: &str) -> Result<(), DomainError>
+    where
+        U: 'static + Clone + Debug + From<V> + Send,
+        V: 'static + Clone + Debug + From<U> + Send,
+    {
+        let (ep0s, ep0r) = Wire::endpoints::<U>();
+        let (ep1s, ep1r) = Wire::endpoints::<V>();
+
+        {
+            let switch0 = self.devices
+                .node_weight_mut(switch0.graph_id)
+                .ok_or(DomainError::InvalidHandler)?
+                .switch_mut()
+                .ok_or(DomainError::InvalidHandler)?
+                .as_any_mut()
+                .downcast_mut::<Switch<U>>()
+                .ok_or(DomainError::InvalidHandler)?;
+
+
+            switch0.attach(Address::new(name), ep0s)?;
+        }
+
+        {
+            let switch1 = self.devices
+                .node_weight_mut(switch1.graph_id)
+                .ok_or(DomainError::InvalidHandler)?
+                .switch_mut()
+                .ok_or(DomainError::InvalidHandler)?
+                .as_any_mut()
+                .downcast_mut::<Switch<V>>()
+                .ok_or(DomainError::InvalidHandler)?;
+
+
+            switch1.attach(Address::new(name), ep1s)?;
+        }
+
+        let router = Router::<U, V>::builder()
+            .set_name(name)
+            .set_endpoint0(ep0r)
+            .set_endpoint1(ep1r)
+            .done()?;
+
+        let router_id = router.get_id();
+
+        let router = Device::Router(Box::new(router));
+        let node_id = self.devices.add_node(router);
+
+        RouterHandler::new(router_id, node_id);
+        Ok(())
+    }
+
 
     pub fn done(self) -> DomainServer {
         let Self {
@@ -86,7 +151,9 @@ impl Domain {
                     Device::Switch(switch) => {
                         Some(switch.get_poller())
                     }
-                    _ => { None }
+                    Device::Router(router) => {
+                        Some(router.get_poller())
+                    }
                 }
             })
             .collect::<Vec<_>>();
@@ -103,11 +170,15 @@ pub struct DomainServer {
 
 impl DomainServer {
     pub async fn serve(self, shutdown: impl Future<Output = ()>) {
-        let pollers = self.pollers;
-
         tokio::select! {
-            _ = futures::future::select_all(pollers) => {},
+            _ = self.inner_poll() => {},
             _ = shutdown => {},
         }
+    }
+
+    pub async fn inner_poll(self) {
+        let pollers = self.pollers;
+
+        futures::future::select_all(pollers).await;
     }
 }
