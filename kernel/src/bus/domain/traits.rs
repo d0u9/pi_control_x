@@ -1,26 +1,25 @@
-use std::marker::{Send, Sync};
+use std::pin::Pin;
+use std::any::Any;
 use std::fmt::Debug;
 use std::future::Future;
 
 use super::super::switch::*;
 
-pub(super) struct DevicePoller;
+pub trait SwitchDev: Any {
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 
-pub trait Pollable {
-    // fn pollable(self, shutdown: impl Future<Output = ()> + 'static) -> Box<dyn Future<Output = ()>>;
-    fn pollable(self) -> Box<dyn Future<Output = ()>>;
-    // fn pollable(self) {
+    fn get_poller(self: Box<Self>) -> Pin<Box<dyn Future<Output = ()>>>;
 }
 
-impl<T> Pollable for Switch<T>
+impl<T> SwitchDev for Switch<T> 
 where
-    T: Clone + Debug + Send + Sync + 'static
+    T: 'static + Debug + Clone
 {
-    // fn pollable(self, shutdown: impl Future<Output = ()> + 'static) -> Box<dyn Future<Output = ()>> {
-    // fn pollable(self) {
-    fn pollable(self) -> Box<dyn Future<Output = ()>> {
-        Box::new(self.poll())
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn get_poller(self: Box<Self>) -> Pin<Box<dyn Future<Output = ()>>> {
+        Box::pin(self.poll())
     }
 }
-
-

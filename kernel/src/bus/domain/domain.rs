@@ -1,5 +1,5 @@
 use std::fmt::Debug;
-use std::any::Any;
+use std::future::Future;
 
 use petgraph::graph::Graph;
 
@@ -11,7 +11,7 @@ use super::super::wire::{Wire, Endpoint};
 use super::super::address::Address;
 
 enum Device {
-    Switch(Box<dyn Any>),
+    Switch(Box<dyn SwitchDev>),
     Test1,
     Test2
 }
@@ -52,34 +52,46 @@ impl Domain {
 
         match device {
             Device::Switch(switch) => {
-                match switch.downcast_mut::<Switch<T>>() {
+                match switch.as_any_mut().downcast_mut::<Switch<T>>() {
                     Some(switch) => {
                         switch.attach(addr, ep1)?;
                     }
                     _ => return Err(DomainError::InvalidHandler),
                 }
             }
-            _ => { }
+            Device::Test1 => {
+                println!("xx");
+            }
+            _ => { 
+            }
         }
 
 
         Ok(ep0)
     }
 
-    pub fn serve(self) {
+    pub async fn serve(self, shutdown: impl Future<Output = ()>) {
         let Self {
             devices,
             ..
         } = self;
+
         let (device_nodes, _) = devices.into_nodes_edges();
-        let _ = device_nodes.into_iter()
+        let pollers = device_nodes.into_iter()
             .map(|node| node.weight)
-            .map(|device| {
+            .filter_map(|device| {
                 match device {
-                    Device::Switch(switch) => {  }
-                    _ => { }
+                    Device::Switch(switch) => {
+                        Some(switch.get_poller())
+                    }
+                    _ => { None }
                 }
             })
             .collect::<Vec<_>>();
+
+        tokio::select! {
+            _ = futures::future::select_all(pollers) => {},
+            _ = shutdown => {},
+        }
     }
 }
