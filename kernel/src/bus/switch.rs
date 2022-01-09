@@ -165,6 +165,10 @@ impl<T: Clone + Debug> Port<T> {
         self.tx.send_pkt(pkt);
     }
 
+    fn receives_cout(&self) -> usize {
+        self.tx.receiver_count()
+    }
+
     fn set_to_simplex(&mut self) {
         self.simplex = true;
     }
@@ -184,6 +188,14 @@ impl<T: Clone + Debug> Switch<T> {
             endpoints: HashMap::new(),
             mode: SwitchMode::Local,
             name: "".to_string(),
+        }
+    }
+
+    pub fn human_id(&self) -> String {
+        if self.name.is_empty() {
+            self.id.to_string()
+        } else {
+            self.name.to_string()
         }
     }
 
@@ -239,6 +251,8 @@ impl<T: Clone + Debug> Switch<T> {
     }
 
     async fn inner_poll(mut self) {
+        let human_id = self.human_id();
+        trace!("[Switch({})] Start polling...", human_id);
         loop {
             let pin_futures = self
                 .ports
@@ -251,7 +265,7 @@ impl<T: Clone + Debug> Switch<T> {
             if let PollResult::Ok(mut pkt) = poll_result {
                 trace!(
                     "[Switch({})] New data arrivas at port ({}): {:?}",
-                    self.id,
+                    self.human_id(),
                     ready_addr,
                     pkt
                 );
@@ -259,9 +273,13 @@ impl<T: Clone + Debug> Switch<T> {
                 self.tag_rt_info(&mut pkt, &ready_addr);
                 self.switch(&ready_addr, pkt);
             } else {
-                trace!("[Switch({})] Port ({}) is closed", self.id, ready_addr);
+                trace!("[Switch({})] Port ({}) is closed", self.human_id(), ready_addr);
                 if let Some(port) = self.ports.get_mut(&ready_addr) {
-                    port.set_to_simplex();
+                    if port.receives_cout() > 0 {
+                        port.set_to_simplex();
+                    } else {
+                        self.ports.remove(&ready_addr);
+                    }
                 } else {
                     warn!("[BUG::Swich] Cannot find a polled port!");
                 }
@@ -305,7 +323,7 @@ impl<T: Clone + Debug> Switch<T> {
     }
 
     fn broadcast(&self, saddr: &Address, pkt: Packet<T>) {
-        trace!("[Switch({})] Braodcast pkt: {:?}", self.id, pkt);
+        trace!("[Switch({})] Braodcast pkt: {:?}", self.human_id(), pkt);
         self.ports
             .iter()
             .filter(|(addr, _)| addr != &saddr)
@@ -323,7 +341,7 @@ impl<T: Clone + Debug> Switch<T> {
         if let Some(port) = dst_port {
             trace!(
                 "[Switch({})] Packet is sent to local port: {:?}",
-                self.id,
+                self.human_id(),
                 port.addr
             );
             port.send(pkt);
@@ -343,7 +361,7 @@ impl<T: Clone + Debug> Switch<T> {
                     SwitchMode::Gateway(ref gateway) => {
                         trace!(
                             "[Switch({})] Not a local packet, sent to gateway({})",
-                            self.id,
+                            self.human_id(),
                             gateway
                         );
                         vec![gateway]
@@ -352,7 +370,7 @@ impl<T: Clone + Debug> Switch<T> {
                         self.router_addrs.iter().collect::<Vec<_>>()
                     }
                     SwitchMode::Local => {
-                        trace!("[Switch({})] Not a local packet, and not gateway is specificed, drop!!", self.id);
+                        trace!("[Switch({})] Not a local packet, and not gateway is specificed, drop!!", self.human_id());
                         return;
                     }
                 }
@@ -364,7 +382,10 @@ impl<T: Clone + Debug> Switch<T> {
                 .collect::<Vec<_>>(),
         };
 
-        trace!("----------- {:?}", candidates);
+        if candidates.is_empty() {
+            trace!("Packet is not receivers, DROP!!!!: {:?}", pkt);
+            return;
+        }
 
         candidates.into_iter().for_each(|addr| {
             let port = self.ports.get(addr);
@@ -412,7 +433,7 @@ impl<T: Debug + Clone> Debug for Switch<T> {
              ports: \n\
                 {ports} \n\
             }}",
-            id = &self.id,
+            id = &self.human_id(),
             name = &self.name,
             mode = &self.mode,
             router_addrs = router_addrs,

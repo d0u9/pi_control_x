@@ -106,10 +106,10 @@ impl Domain {
                 .node_weight_mut(switch0_handler.graph_id)
                 .ok_or(DomainError::InvalidHandler)?
                 .switch_mut()
-                .ok_or(DomainError::InvalidHandler)?
+                .ok_or(DomainError::HandlerIsNotSwitch)?
                 .as_any_mut()
                 .downcast_mut::<Switch<U>>()
-                .ok_or(DomainError::InvalidHandler)?;
+                .ok_or(DomainError::TypeMismatch)?;
 
 
             let addr = Address::new(name);
@@ -126,10 +126,10 @@ impl Domain {
                 .node_weight_mut(switch1_handler.graph_id)
                 .ok_or(DomainError::InvalidHandler)?
                 .switch_mut()
-                .ok_or(DomainError::InvalidHandler)?
+                .ok_or(DomainError::HandlerIsNotSwitch)?
                 .as_any_mut()
                 .downcast_mut::<Switch<V>>()
-                .ok_or(DomainError::InvalidHandler)?;
+                .ok_or(DomainError::TypeMismatch)?;
 
 
             let addr = Address::new(name);

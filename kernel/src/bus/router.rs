@@ -74,6 +74,14 @@ where
         }
     }
 
+    pub fn human_id(&self) -> String {
+        if self.name.is_empty() {
+            self.id.to_string()
+        } else {
+            self.name.to_string()
+        }
+    }
+
     pub async fn poll(self) {
         self.inner_poll().await
     }
@@ -97,9 +105,10 @@ where
     }
 
     async fn inner_poll(self) {
+        let human_id = self.human_id();
         let (tx0, mut rx0) = self.ep0.split();
         let (tx1, mut rx1) = self.ep1.split();
-        trace!("[Router({})] Start polling...", self.id);
+        trace!("[Router({})] Start polling...", human_id);
         loop {
             tokio::select! {
                 Ok(pkt) = rx0.recv() => {

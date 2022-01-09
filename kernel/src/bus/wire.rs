@@ -4,10 +4,10 @@ use std::fmt::Debug;
 use log::trace;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
-use uuid::Uuid;
 
 use super::address::Address;
 use super::packet::Packet;
+use super::types::DevId;
 
 type RawRx<T> = broadcast::Receiver<T>;
 type RawTx<T> = broadcast::Sender<T>;
@@ -20,8 +20,8 @@ pub enum EndpointError {
 
 #[derive(Debug)]
 pub struct Rx<T> {
-    wire: Uuid,
-    peer: Uuid,
+    wire: DevId,
+    peer: DevId,
     rx: RawRx<Packet<T>>,
 }
 
@@ -58,19 +58,19 @@ impl<T: Debug + Clone> Rx<T> {
         }
     }
 
-    pub fn wire_id(&self) -> Uuid {
+    pub fn wire_id(&self) -> DevId {
         self.wire
     }
 
-    pub fn peer_id(&self) -> Uuid {
+    pub fn peer_id(&self) -> DevId {
         self.peer
     }
 }
 
 #[derive(Debug)]
 pub struct Tx<T> {
-    wire: Uuid,
-    peer: Uuid,
+    wire: DevId,
+    peer: DevId,
     tx: RawTx<Packet<T>>,
 }
 
@@ -88,19 +88,23 @@ impl<T: Debug + Clone> Tx<T> {
         }
     }
 
-    pub fn wire_id(&self) -> Uuid {
+    pub fn wire_id(&self) -> DevId {
         self.wire
     }
 
-    pub fn peer_id(&self) -> Uuid {
+    pub fn peer_id(&self) -> DevId {
         self.peer
+    }
+
+    pub fn receiver_count(&self) -> usize {
+        self.tx.receiver_count()
     }
 }
 
 #[derive(Debug)]
 pub struct Endpoint<T> {
-    peer: Uuid,
-    wire: Uuid,
+    peer: DevId,
+    wire: DevId,
     tx_this: RawTx<Packet<T>>,
     tx_that: RawTx<Packet<T>>,
 }
@@ -129,18 +133,18 @@ impl Wire {
     pub fn endpoints<T: Debug + Clone>() -> (Endpoint<T>, Endpoint<T>) {
         let (tx0, _) = broadcast::channel(16);
         let (tx1, _) = broadcast::channel(16);
-        let wire0 = Uuid::new_v4();
+        let wire0 = DevId::new();
         let wire1 = wire0;
 
         let ep0 = Endpoint {
-            peer: Uuid::new_v4(),
+            peer: DevId::new(),
             wire: wire0,
             tx_this: tx0.clone(),
             tx_that: tx1.clone(),
         };
 
         let ep1 = Endpoint {
-            peer: Uuid::new_v4(),
+            peer: DevId::new(),
             wire: wire1,
             tx_this: tx1,
             tx_that: tx0,

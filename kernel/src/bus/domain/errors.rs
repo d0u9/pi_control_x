@@ -9,6 +9,8 @@ pub enum DomainError {
     AddressInUsed,
     AddressInvalid,
     SwitchJoinError,
+    HandlerIsNotSwitch,
+    HandlerIsNotRouter,
     TypeMismatch,
 }
 
