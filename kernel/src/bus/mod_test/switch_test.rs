@@ -28,7 +28,7 @@ async fn switch_basic_test() {
 
     let (shut_tx, mut shut_rx) = mpsc::channel::<()>(1);
     let join = tokio::spawn(async move {
-        switch.poll(shut_rx.recv().map(|_| ())).await;
+        switch.poll_with_graceful(shut_rx.recv().map(|_| ())).await;
     });
 
     time::sleep(Duration::from_millis(10)).await;
@@ -75,7 +75,7 @@ async fn switch_broadcast_test() {
 
     let (shut_tx, mut shut_rx) = mpsc::channel::<()>(1);
     let join = tokio::spawn(async move {
-        switch.poll(shut_rx.recv().map(|_| ())).await;
+        switch.poll_with_graceful(shut_rx.recv().map(|_| ())).await;
     });
 
     time::sleep(Duration::from_millis(10)).await;

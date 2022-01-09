@@ -169,7 +169,11 @@ impl<T: Clone + Debug> Switch<T> {
         }
     }
 
-    pub async fn poll(self, shutdown: impl Future<Output = ()>) {
+    pub async fn poll(self) {
+        self.inner_poll().await
+    }
+
+    pub async fn poll_with_graceful(self, shutdown: impl Future<Output = ()>) {
         let id = self.id;
         tokio::select! {
             _ = shutdown => {
