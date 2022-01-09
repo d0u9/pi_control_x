@@ -1,3 +1,5 @@
+use std::pin::Pin;
+use std::sync::{Arc,Mutex};
 use std::fmt::Debug;
 use std::future::Future;
 
@@ -29,7 +31,7 @@ impl Domain {
 
     pub fn add_switch<T>(&mut self, name: &str) -> SwitchHandler
     where
-        T: 'static + Clone + Debug
+        T: 'static + Clone + Debug + Send
     {
         let switch = Switch::<T>::builder()
                 .set_name(name)
@@ -70,7 +72,7 @@ impl Domain {
         Ok(ep0)
     }
 
-    pub async fn serve(self, shutdown: impl Future<Output = ()>) {
+    pub fn done(self) -> DomainServer {
         let Self {
             devices,
             ..
@@ -88,6 +90,20 @@ impl Domain {
                 }
             })
             .collect::<Vec<_>>();
+
+        DomainServer {
+            pollers,
+        }
+    }
+}
+
+pub struct DomainServer {
+    pollers: Vec<Pin<Box<dyn Future<Output = ()> + Send>>>,
+}
+
+impl DomainServer {
+    pub async fn serve(self, shutdown: impl Future<Output = ()>) {
+        let pollers = self.pollers;
 
         tokio::select! {
             _ = futures::future::select_all(pollers) => {},
