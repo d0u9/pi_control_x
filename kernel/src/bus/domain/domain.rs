@@ -12,8 +12,8 @@ use super::super::address::Address;
 
 enum Device {
     Switch(Box<dyn Any>),
-    Test(Box<dyn Debug>),
-    Test2(Box<dyn Pollable>),
+    Test1,
+    Test2
 }
 
 pub struct Domain {
