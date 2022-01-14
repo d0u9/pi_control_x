@@ -1,8 +1,7 @@
-#[cfg(test)]
-
-use futures::future::FutureExt;
 use std::net::Ipv4Addr;
 use std::time::Duration;
+
+use futures::future::FutureExt;
 use test_log::test;
 use tokio::sync::broadcast;
 use tokio::time;
