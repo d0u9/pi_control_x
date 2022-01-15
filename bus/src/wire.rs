@@ -101,7 +101,7 @@ impl<T: Debug + Clone> Tx<T> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Endpoint<T> {
     peer: DevId,
     wire: DevId,
