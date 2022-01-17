@@ -1,11 +1,10 @@
-#[cfg(test)]
 use futures::future::FutureExt;
 use std::time::Duration;
 use test_log::test;
 use tokio::sync::mpsc;
 use tokio::time;
+use claim::assert_ok;
 
-#[cfg(test)]
 use super::address::*;
 use super::packet::*;
 use super::switch::*;
@@ -103,6 +102,55 @@ async fn switch_broadcast_test() {
     let _make_c_tx_live_long_enough = c_tx;
 
     time::sleep(Duration::from_millis(10)).await;
+    shut_tx.send(()).await.expect("Send shutdown signal failed");
+
+    join.await.expect("join failed");
+}
+
+
+#[test(tokio::test)]
+async fn test_switch_control_new_endpoint() {
+    let mut switch = Switch::<u32>::builder()
+        .set_name("switch_broadcast_test")
+        .done();
+
+    let ctl_ep = switch.get_control_endpoint();
+    let (ctl_tx, mut ctl_rx) = ctl_ep.split();
+
+    let (shut_tx, mut shut_rx) = mpsc::channel::<()>(1);
+    let join = tokio::spawn(async move {
+        switch.poll_with_graceful(shut_rx.recv().map(|_| ())).await;
+    });
+
+    time::sleep(Duration::from_millis(10)).await;
+
+    let test_addr1 = Address::new("test_addr1");
+    let test_addr2 = Address::new("test_addr2");
+
+    ctl_tx.send_data(ControlMsg::Request(ControlMsgRequest::CreateEndpoint(test_addr1.clone())));
+    let new_ep = assert_ok!(ctl_rx.recv_data().await);
+    let ep1 = match new_ep {
+        ControlMsg::Response(ControlMsgResponse::CreateEndpoint(ep)) => ep,
+        _ => panic!("get endpoint failed"),
+    };
+
+    ctl_tx.send_data(ControlMsg::Request(ControlMsgRequest::CreateEndpoint(test_addr2.clone())));
+    let new_ep = assert_ok!(ctl_rx.recv_data().await);
+    let ep2 = match new_ep {
+        ControlMsg::Response(ControlMsgResponse::CreateEndpoint(ep)) => ep,
+        _ => panic!("get endpoint failed"),
+    };
+
+    let (ep1_tx, _) = ep1.split();
+    let (_, mut ep2_rx) = ep2.split();
+
+    ep1_tx.send(test_addr2.clone(), 0xdeadbeef_u32);
+
+    let (ep2_recv, saddr, daddr) = assert_ok!(ep2_rx.recv_data_addr().await);
+    assert_eq!(saddr, test_addr1);
+    assert_eq!(daddr, test_addr2);
+    assert_eq!(ep2_recv, 0xdeadbeef_u32);
+
     shut_tx.send(()).await.expect("Send shutdown signal failed");
 
     join.await.expect("join failed");

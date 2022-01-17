@@ -80,6 +80,11 @@ impl<T: Debug + Clone> Tx<T> {
         self.send_pkt(pkt)
     }
 
+    pub fn send_data(&self, val: T) {
+        let pkt = Packet::new(Address::Broadcast, val);
+        self.send_pkt(pkt)
+    }
+
     pub fn send_pkt(&self, pkt: Packet<T>) {
         trace!("[Tx({})] Send packet: {:?}", self.peer, pkt);
 
@@ -124,6 +129,15 @@ impl<T: Clone + Debug> Endpoint<T> {
         };
 
         (tx, rx)
+    }
+
+    pub fn get_peer(&self) -> Self {
+        Self {
+            peer: self.peer,
+            wire: self.wire,
+            tx_this: self.tx_that.clone(),
+            tx_that: self.tx_this.clone(),
+        }
     }
 }
 

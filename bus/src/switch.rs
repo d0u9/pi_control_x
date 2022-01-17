@@ -7,10 +7,10 @@ use log::{info, trace, warn};
 
 use super::address::Address;
 use super::packet::{Packet, RouteInfo};
-use super::wire::{Endpoint, Rx, Tx};
+use super::wire::{Wire, Endpoint, Rx, Tx};
 use super::types::DevId;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SwitchError {
     AddressInvalid,
     AddressInUsed,
@@ -92,12 +92,15 @@ impl<T: Debug + Clone> Builder<T> {
             })
             .collect::<HashMap<_, _>>();
 
+        let (control, _) = Wire::endpoints();
+
         let switch = Switch {
             name: self.name,
             id: DevId::new(),
             ports,
             router_addrs,
             mode: self.mode,
+            control_endpoint: control,
         };
 
         trace!(
@@ -174,12 +177,30 @@ impl<T: Clone + Debug> Port<T> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum ControlMsgRequest {
+    CreateEndpoint(Address),
+}
+
+#[derive(Debug, Clone)]
+pub enum ControlMsgResponse<T> {
+    CreateEndpoint(Endpoint<T>),
+}
+
+#[derive(Debug, Clone)]
+pub enum ControlMsg<T> {
+    Request(ControlMsgRequest),
+    Response(ControlMsgResponse<T>),
+    Err(SwitchError),
+}
+
 pub struct Switch<T> {
     id: DevId,
     name: String,
     ports: HashMap<Address, Port<T>>,
     router_addrs: HashSet<Address>,
     mode: SwitchMode,
+    control_endpoint: Endpoint<ControlMsg<T>>,
 }
 
 impl<T: Clone + Debug> Switch<T> {
@@ -221,6 +242,10 @@ impl<T: Clone + Debug> Switch<T> {
         self.name.clone()
     }
 
+    pub fn get_control_endpoint(&mut self) -> Endpoint<ControlMsg<T>> {
+        self.control_endpoint.get_peer()
+    }
+
     pub fn attach_router(&mut self, addr: Address, endpoint: Endpoint<T>) -> Result<(), SwitchError> {
         self.router_addrs.insert(addr.clone());
         self.attach_endpoint(addr, endpoint, true)
@@ -253,36 +278,80 @@ impl<T: Clone + Debug> Switch<T> {
     async fn inner_poll(mut self) {
         let human_id = self.human_id();
         trace!("[Switch({})] Start polling...", human_id);
+        let (ctl_tx, mut ctl_rx) = self.control_endpoint.clone().split();
+
+        enum PollDone<T> {
+            Data((Address, PollResult<T>)),
+            Control(ControlMsg<T>),
+        }
+
         loop {
-            let pin_futures = self
-                .ports
-                .iter_mut()
-                .filter(|(_, port)| !port.simplex)
-                .map(|(_, port)| Box::pin(port.poll()));
-
-            let ((ready_addr, poll_result), _, _) = futures::future::select_all(pin_futures).await;
-
-            if let PollResult::Ok(mut pkt) = poll_result {
-                trace!(
-                    "[Switch({})] New data arrivas at port ({}): {:?}",
-                    self.human_id(),
-                    ready_addr,
-                    pkt
-                );
-                // Process received packet
-                self.tag_rt_info(&mut pkt, &ready_addr);
-                self.switch(&ready_addr, pkt);
-            } else {
-                trace!("[Switch({})] Port ({}) is closed", self.human_id(), ready_addr);
-                if let Some(port) = self.ports.get_mut(&ready_addr) {
-                    if port.receives_cout() > 0 {
-                        port.set_to_simplex();
-                    } else {
-                        self.ports.remove(&ready_addr);
+            let done = if self.ports.is_empty() {
+                tokio::select! {
+                    Ok(ctl_msg) = ctl_rx.recv_data() => {
+                        PollDone::Control(ctl_msg)
                     }
-                } else {
-                    warn!("[BUG::Swich] Cannot find a polled port!");
                 }
+            } else {
+                let pin_futures = self
+                    .ports
+                    .iter_mut()
+                    .filter(|(_, port)| !port.simplex)
+                    .map(|(_, port)| Box::pin(port.poll()));
+
+                let done = tokio::select! {
+                    ((ready_addr, poll_result), _, _) = futures::future::select_all(pin_futures) => {
+                        PollDone::Data((ready_addr, poll_result))
+                    }
+                    Ok(ctl_msg) = ctl_rx.recv_data() => {
+                        PollDone::Control(ctl_msg)
+                    }
+                };
+                done
+            };
+
+            match done {
+                PollDone::Data((ready_addr, poll_result)) => self.process_port_data(ready_addr, poll_result),
+                PollDone::Control(ctl_msg) => self.process_control_data(ctl_msg, &ctl_tx),
+            }
+        }
+    }
+
+    fn process_control_data(&mut self, ctl_msg: ControlMsg<T>, tx: &Tx<ControlMsg<T>>) {
+        if let ControlMsg::Request(rqst) = ctl_msg {
+            match rqst {
+                ControlMsgRequest::CreateEndpoint(addr) => {
+                    let (ep0, ep1) = Wire::endpoints::<T>();
+                    match self.attach(addr, ep0) {
+                        Ok(_) => tx.send_data(ControlMsg::Response(ControlMsgResponse::CreateEndpoint(ep1))),
+                        Err(e) => tx.send_data(ControlMsg::Err(e)),
+                    }
+                }
+            }
+        }
+    }
+
+    fn process_port_data(&mut self, ready_addr: Address, poll_result: PollResult<T>) {
+        if let PollResult::Ok(mut pkt) = poll_result {
+            trace!(
+                "[Switch({})] New data arrivas at port ({}): {:?}",
+                self.human_id(),
+                ready_addr,
+                pkt
+                );
+            // Process received packet
+            self.tag_rt_info(&mut pkt, &ready_addr);
+            self.switch(&ready_addr, pkt);
+        } else {
+            trace!("[Switch({})] Port ({}) is closed", self.human_id(), ready_addr);
+            if let Some(port) = self.ports.get_mut(&ready_addr) {
+                if port.receives_cout() > 0 {
+                    port.set_to_simplex();
+                } else {
+                    self.ports.remove(&ready_addr);
+                }
+            } else {
+                warn!("[BUG::Swich] Cannot find a polled port!");
             }
         }
     }
