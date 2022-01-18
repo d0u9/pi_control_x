@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use grpc_api::disk_server::{Disk, DiskServer};
 use grpc_api::{ListReply, ListRequest};
+use tokio::time::Duration;
 use tonic::{Request, Response, Status};
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -58,7 +59,11 @@ impl Disk for DiskApiService {
         tx.send(that_addr, DiskBusData{
             msg: format!("request request {:?}", request.into_inner()),
         });
-        let data = rx.recv_data().await.unwrap();
+
+        let data = match rx.recv_data_timeout(Duration::from_secs(3)).await {
+            Err(e) => return Err(Status::cancelled(format!("{:?}", e))),
+            Ok(data) => data,
+        };
 
         let reply = ListReply {
             // timestamp: format!("reply: {}", request.timestamp),

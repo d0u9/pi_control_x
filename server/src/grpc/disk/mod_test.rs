@@ -41,7 +41,6 @@ async fn test_grpc_disk_server() {
 
     let (shut_tx, mut shut_rx) = broadcast::channel::<()>(1);
 
-    let local_addr = Address::new("grpc_disk");
     let target_addr = Address::new("disk_enumerator");
 
     let (mut switch, target_ep) = create_bus::<DiskBusData>(target_addr.clone());
