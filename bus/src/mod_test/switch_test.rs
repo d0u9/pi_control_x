@@ -114,8 +114,7 @@ async fn test_switch_control_new_endpoint() {
         .set_name("switch_broadcast_test")
         .done();
 
-    let ctl_ep = switch.get_control_endpoint();
-    let (ctl_tx, mut ctl_rx) = ctl_ep.split();
+    let mut ctl_ep = switch.get_control_endpoint();
 
     let (shut_tx, mut shut_rx) = mpsc::channel::<()>(1);
     let join = tokio::spawn(async move {
@@ -127,19 +126,14 @@ async fn test_switch_control_new_endpoint() {
     let test_addr1 = Address::new("test_addr1");
     let test_addr2 = Address::new("test_addr2");
 
-    ctl_tx.send_request(ControlMsgRequest::CreateEndpoint(test_addr1.clone()));
-    let new_ep = assert_ok!(ctl_rx.recv_response().await);
-
-    let ep1 = if let ControlMsgResponse::CreateEndpoint(ep) = new_ep {
+    let ep1 = if let Ok(ep) = ctl_ep.add_endpoint(test_addr1.clone()).await {
         ep
     } else {
         panic!("get endpoint failed");
     };
 
-    ctl_tx.send_request(ControlMsgRequest::CreateEndpoint(test_addr2.clone()));
-    let new_ep = assert_ok!(ctl_rx.recv_response().await);
 
-    let ep2 = if let ControlMsgResponse::CreateEndpoint(ep) = new_ep {
+    let ep2 = if let Ok(ep) = ctl_ep.add_endpoint(test_addr2.clone()).await {
         ep
     } else {
         panic!("get endpoint failed");

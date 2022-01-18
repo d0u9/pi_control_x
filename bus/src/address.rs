@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Address {
+    P2P,
     Broadcast,
     Addr(String),
 }
@@ -15,7 +16,8 @@ impl Address {
 impl Display for Address {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Broadcast => writeln!(f, "BROADCAST"),
+            Self::P2P => write!( f, "P2P"),
+            Self::Broadcast => write!(f, "BROADCAST"),
             Self::Addr(addr) => write!(f, "{}", addr),
         }
     }

@@ -14,6 +14,7 @@ use super::types::DevId;
 pub enum SwitchError {
     AddressInvalid,
     AddressInUsed,
+    UnknowCtrlErr,
 }
 
 #[derive(Debug)]
@@ -248,7 +249,7 @@ impl<T: Clone + Debug> Switch<T> {
         self.name.clone()
     }
 
-    pub fn get_control_endpoint(&mut self) -> SwitchCtrlEndpoint<T> {
+    pub fn get_control_endpoint(&mut self) -> SwitchCtrl<T> {
         self.control_endpoint.get_peer()
     }
 
@@ -388,6 +389,8 @@ impl<T: Clone + Debug> Switch<T> {
             Address::Addr(_) => {
                 self.send_to(saddr, pkt);
             }
+            _ => {
+            }
         }
     }
 
@@ -513,6 +516,7 @@ impl<T: Debug + Clone> Debug for Switch<T> {
     }
 }
 
+#[derive(Debug)]
 pub struct SwitchCtrlTx<T> {
     inner: Tx<ControlMsg<T>>
 }
@@ -522,18 +526,19 @@ where
 T: Clone + Debug
 {
     pub fn send_request(&self, msg: ControlMsgRequest) {
-        self.inner.send(Address::Broadcast, ControlMsg::Request(msg));
+        self.inner.send(Address::P2P, ControlMsg::Request(msg));
     }
 
     fn send_response(&self, msg: ControlMsgResponse<T>) {
-        self.inner.send(Address::Broadcast, ControlMsg::Response(msg));
+        self.inner.send(Address::P2P, ControlMsg::Response(msg));
     }
 
     fn send_err(&self, msg: ControlMsgErr) {
-        self.inner.send(Address::Broadcast, ControlMsg::Err(msg));
+        self.inner.send(Address::P2P, ControlMsg::Err(msg));
     }
 }
 
+#[derive(Debug)]
 pub struct SwitchCtrlRx<T> {
     inner: Rx<ControlMsg<T>>
 }
@@ -561,8 +566,8 @@ T: Clone + Debug
     }
 }
 
-#[derive(Clone)]
-pub struct SwitchCtrlEndpoint<T> {
+#[derive(Clone, Debug)]
+struct SwitchCtrlEndpoint<T> {
     inner: Endpoint<ControlMsg<T>>,
 }
 
@@ -570,18 +575,25 @@ impl<T> SwitchCtrlEndpoint<T>
 where
 T: Clone + Debug
 {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self::default()
     }
 
-    pub fn get_peer(&self) -> Self {
-        Self{ inner: self.inner.get_peer() }
+    fn get_peer(&self) -> SwitchCtrl<T> {
+        let peer = self.inner.get_peer();
+        let (tx, rx) = peer.clone().split();
+        SwitchCtrl {
+            inner: peer,
+            tx: SwitchCtrlTx{inner: tx},
+            rx: SwitchCtrlRx{inner: rx},
+        }
     }
 
-    pub fn split(self) -> (SwitchCtrlTx<T>, SwitchCtrlRx<T>) {
+    fn split(self) -> (SwitchCtrlTx<T>, SwitchCtrlRx<T>) {
         let (tx, rx) = self.inner.split();
         (SwitchCtrlTx{ inner: tx }, SwitchCtrlRx{ inner: rx })
     }
+
 }
 
 impl<T> Default for SwitchCtrlEndpoint<T>
@@ -593,3 +605,40 @@ T: Clone + Debug
         Self{ inner: control }
     }
 }
+
+#[derive(Debug)]
+pub struct SwitchCtrl<T> {
+    inner: Endpoint<ControlMsg<T>>,
+    tx: SwitchCtrlTx<T>,
+    rx: SwitchCtrlRx<T>,
+}
+
+impl<T> Clone for SwitchCtrl<T>
+where
+    T: Debug + Clone
+{
+    fn clone(&self) -> Self {
+        let inner = self.inner.clone();
+        let (tx, rx) = inner.clone().split();
+        SwitchCtrl {
+            inner,
+            tx: SwitchCtrlTx{inner: tx},
+            rx: SwitchCtrlRx{inner: rx},
+        }
+    }
+}
+
+impl<T> SwitchCtrl<T>
+where
+    T: Debug + Clone
+{
+    pub async fn add_endpoint(&mut self, addr: Address) -> Result<Endpoint<T>, SwitchError> {
+        self.tx.send_request(ControlMsgRequest::CreateEndpoint(addr));
+        match self.rx.recv_response().await {
+            Ok(ControlMsgResponse::CreateEndpoint(ep)) => Ok(ep),
+            Err(ControlMsgErr::SwitchErr(e)) => Err(e),
+            _ => Err(SwitchError::UnknowCtrlErr),
+        }
+    }
+}
+

@@ -12,6 +12,7 @@ pub enum DomainError {
     HandlerIsNotSwitch,
     HandlerIsNotRouter,
     TypeMismatch,
+    UnknowCtrlErr,
 }
 
 impl From<SwitchError> for DomainError {
@@ -19,6 +20,7 @@ impl From<SwitchError> for DomainError {
         match e {
             SwitchError::AddressInUsed => Self::AddressInUsed,
             SwitchError::AddressInvalid => Self::AddressInvalid,
+            SwitchError::UnknowCtrlErr => Self::UnknowCtrlErr,
         }
     }
 }
