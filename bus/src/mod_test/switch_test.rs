@@ -127,18 +127,22 @@ async fn test_switch_control_new_endpoint() {
     let test_addr1 = Address::new("test_addr1");
     let test_addr2 = Address::new("test_addr2");
 
-    ctl_tx.send_data(ControlMsg::Request(ControlMsgRequest::CreateEndpoint(test_addr1.clone())));
-    let new_ep = assert_ok!(ctl_rx.recv_data().await);
-    let ep1 = match new_ep {
-        ControlMsg::Response(ControlMsgResponse::CreateEndpoint(ep)) => ep,
-        _ => panic!("get endpoint failed"),
+    ctl_tx.send_request(ControlMsgRequest::CreateEndpoint(test_addr1.clone()));
+    let new_ep = assert_ok!(ctl_rx.recv_response().await);
+
+    let ep1 = if let ControlMsgResponse::CreateEndpoint(ep) = new_ep {
+        ep
+    } else {
+        panic!("get endpoint failed");
     };
 
-    ctl_tx.send_data(ControlMsg::Request(ControlMsgRequest::CreateEndpoint(test_addr2.clone())));
-    let new_ep = assert_ok!(ctl_rx.recv_data().await);
-    let ep2 = match new_ep {
-        ControlMsg::Response(ControlMsgResponse::CreateEndpoint(ep)) => ep,
-        _ => panic!("get endpoint failed"),
+    ctl_tx.send_request(ControlMsgRequest::CreateEndpoint(test_addr2.clone()));
+    let new_ep = assert_ok!(ctl_rx.recv_response().await);
+
+    let ep2 = if let ControlMsgResponse::CreateEndpoint(ep) = new_ep {
+        ep
+    } else {
+        panic!("get endpoint failed");
     };
 
     let (ep1_tx, _) = ep1.split();

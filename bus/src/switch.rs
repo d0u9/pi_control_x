@@ -92,7 +92,7 @@ impl<T: Debug + Clone> Builder<T> {
             })
             .collect::<HashMap<_, _>>();
 
-        let (control, _) = Wire::endpoints();
+        let control = SwitchCtrlEndpoint::new();
 
         let switch = Switch {
             name: self.name,
@@ -185,13 +185,19 @@ pub enum ControlMsgRequest {
 #[derive(Debug, Clone)]
 pub enum ControlMsgResponse<T> {
     CreateEndpoint(Endpoint<T>),
+    UNSPEC,
+}
+
+#[derive(Debug, Clone)]
+pub enum ControlMsgErr {
+    SwitchErr(SwitchError)
 }
 
 #[derive(Debug, Clone)]
 pub enum ControlMsg<T> {
     Request(ControlMsgRequest),
     Response(ControlMsgResponse<T>),
-    Err(SwitchError),
+    Err(ControlMsgErr),
 }
 
 pub struct Switch<T> {
@@ -200,7 +206,7 @@ pub struct Switch<T> {
     ports: HashMap<Address, Port<T>>,
     router_addrs: HashSet<Address>,
     mode: SwitchMode,
-    control_endpoint: Endpoint<ControlMsg<T>>,
+    control_endpoint: SwitchCtrlEndpoint<T>,
 }
 
 impl<T: Clone + Debug> Switch<T> {
@@ -242,7 +248,7 @@ impl<T: Clone + Debug> Switch<T> {
         self.name.clone()
     }
 
-    pub fn get_control_endpoint(&mut self) -> Endpoint<ControlMsg<T>> {
+    pub fn get_control_endpoint(&mut self) -> SwitchCtrlEndpoint<T> {
         self.control_endpoint.get_peer()
     }
 
@@ -282,15 +288,13 @@ impl<T: Clone + Debug> Switch<T> {
 
         enum PollDone<T> {
             Data((Address, PollResult<T>)),
-            Control(ControlMsg<T>),
+            Control(ControlMsgRequest),
         }
 
         loop {
             let done = if self.ports.is_empty() {
                 tokio::select! {
-                    Ok(ctl_msg) = ctl_rx.recv_data() => {
-                        PollDone::Control(ctl_msg)
-                    }
+                    ctl_msg = ctl_rx.recv_request() => PollDone::Control(ctl_msg),
                 }
             } else {
                 let pin_futures = self
@@ -303,9 +307,7 @@ impl<T: Clone + Debug> Switch<T> {
                     ((ready_addr, poll_result), _, _) = futures::future::select_all(pin_futures) => {
                         PollDone::Data((ready_addr, poll_result))
                     }
-                    Ok(ctl_msg) = ctl_rx.recv_data() => {
-                        PollDone::Control(ctl_msg)
-                    }
+                    ctl_msg = ctl_rx.recv_request() => PollDone::Control(ctl_msg),
                 };
                 done
             };
@@ -317,15 +319,13 @@ impl<T: Clone + Debug> Switch<T> {
         }
     }
 
-    fn process_control_data(&mut self, ctl_msg: ControlMsg<T>, tx: &Tx<ControlMsg<T>>) {
-        if let ControlMsg::Request(rqst) = ctl_msg {
-            match rqst {
-                ControlMsgRequest::CreateEndpoint(addr) => {
-                    let (ep0, ep1) = Wire::endpoints::<T>();
-                    match self.attach(addr, ep0) {
-                        Ok(_) => tx.send_data(ControlMsg::Response(ControlMsgResponse::CreateEndpoint(ep1))),
-                        Err(e) => tx.send_data(ControlMsg::Err(e)),
-                    }
+    fn process_control_data(&mut self, ctl_request: ControlMsgRequest, tx: &SwitchCtrlTx<T>) {
+        match ctl_request {
+            ControlMsgRequest::CreateEndpoint(addr) => {
+                let (ep0, ep1) = Wire::endpoints::<T>();
+                match self.attach(addr, ep0) {
+                    Ok(_) => tx.send_response(ControlMsgResponse::CreateEndpoint(ep1)),
+                    Err(e) => tx.send_err(ControlMsgErr::SwitchErr(e)),
                 }
             }
         }
@@ -510,5 +510,86 @@ impl<T: Debug + Clone> Debug for Switch<T> {
         );
 
         write!(f, "{}", msg)
+    }
+}
+
+pub struct SwitchCtrlTx<T> {
+    inner: Tx<ControlMsg<T>>
+}
+
+impl<T> SwitchCtrlTx<T>
+where
+T: Clone + Debug
+{
+    pub fn send_request(&self, msg: ControlMsgRequest) {
+        self.inner.send(Address::Broadcast, ControlMsg::Request(msg));
+    }
+
+    fn send_response(&self, msg: ControlMsgResponse<T>) {
+        self.inner.send(Address::Broadcast, ControlMsg::Response(msg));
+    }
+
+    fn send_err(&self, msg: ControlMsgErr) {
+        self.inner.send(Address::Broadcast, ControlMsg::Err(msg));
+    }
+}
+
+pub struct SwitchCtrlRx<T> {
+    inner: Rx<ControlMsg<T>>
+}
+
+impl<T> SwitchCtrlRx<T>
+where
+T: Clone + Debug
+{
+    async fn recv_request(&mut self) -> ControlMsgRequest {
+        loop {
+            if let Ok(ControlMsg::Request(rqst)) = self.inner.recv_data().await {
+                return rqst;
+            }
+        }
+    }
+
+    pub async fn recv_response(&mut self) -> Result<ControlMsgResponse<T>, ControlMsgErr> {
+        loop {
+            match self.inner.recv_data().await {
+                Ok(ControlMsg::Response(rsps)) => { return Ok(rsps) }
+                Ok(ControlMsg::Err(err)) => { return Err(err) }
+                _ => { }
+            }
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct SwitchCtrlEndpoint<T> {
+    inner: Endpoint<ControlMsg<T>>,
+}
+
+impl<T> SwitchCtrlEndpoint<T>
+where
+T: Clone + Debug
+{
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn get_peer(&self) -> Self {
+        Self{ inner: self.inner.get_peer() }
+    }
+
+    pub fn split(self) -> (SwitchCtrlTx<T>, SwitchCtrlRx<T>) {
+        let (tx, rx) = self.inner.split();
+        (SwitchCtrlTx{ inner: tx }, SwitchCtrlRx{ inner: rx })
+    }
+}
+
+impl<T> Default for SwitchCtrlEndpoint<T>
+where
+T: Clone + Debug
+{
+    fn default() -> Self {
+        let (control, _) = Wire::endpoints();
+        Self{ inner: control }
     }
 }
