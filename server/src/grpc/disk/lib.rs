@@ -60,10 +60,9 @@ impl Disk for DiskApiService {
             msg: format!("request request {:?}", request.into_inner()),
         });
 
-        let data = match rx.recv_data_timeout(Duration::from_secs(3)).await {
-            Err(e) => return Err(Status::cancelled(format!("{:?}", e))),
-            Ok(data) => data,
-        };
+        let data = rx.recv_data_timeout(Duration::from_secs(3)).await.map_err(|e| {
+            GrpcError::bus_err(e)
+        })?;
 
         let reply = ListReply {
             // timestamp: format!("reply: {}", request.timestamp),
