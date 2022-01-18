@@ -20,6 +20,7 @@ prost = "0.9"
 tonic = "0.6"
 futures = { version = "0.3" }
 bus = { path = "../bus" }
+uuid = { version = "0.8", features = ["v4"] }
 
 [build-dependencies]
 tonic-build = "0.6"

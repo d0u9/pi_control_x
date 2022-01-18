@@ -7,12 +7,13 @@ use tokio::time;
 use tokio::sync::broadcast;
 use test_log::test;
 use claim::assert_ok;
+
 use bus::wire::Wire;
 use bus::address::Address;
 use bus::switch::Switch;
 use bus::wire::Endpoint;
 
-use super::main::*;
+use super::lib::*;
 
 mod grpc_api {
     tonic::include_proto!("grpc_api"); // The string specified here must match the proto package name
@@ -21,19 +22,16 @@ mod grpc_api {
 use grpc_api::disk_client::DiskClient;
 use grpc_api::ListRequest;
 
-fn create_bus<T: Clone + Debug>(target_addr: Address, local_addr: Address) -> (Switch<T>, Endpoint<T>, Endpoint<T>) {
-    let (epa0, epa1) = Wire::endpoints::<T>();
-    let (epb0, epb1) = Wire::endpoints::<T>();
+fn create_bus<T: Clone + Debug>(target_addr: Address) -> (Switch<T>, Endpoint<T>) {
+    let (ep0, ep1) = Wire::endpoints::<T>();
 
     let switch = Switch::<T>::builder()
-        .attach(target_addr, epa0)
-        .expect("attach endpoint failed")
-        .attach(local_addr, epb0)
+        .attach(target_addr, ep0)
         .expect("attach endpoint failed")
         .set_name("switch_broadcast_test")
         .done();
 
-    (switch, epa1, epb1)
+    (switch, ep1)
 }
 
 #[test(tokio::test)]
@@ -46,14 +44,14 @@ async fn test_grpc_disk_server() {
     let local_addr = Address::new("grpc_disk");
     let target_addr = Address::new("disk_enumerator");
 
-    let (switch, local_ep, target_dp) = create_bus::<DiskBusData>(local_addr.clone(), target_addr.clone());
+    let (mut switch, target_ep) = create_bus::<DiskBusData>(target_addr.clone());
+    let switch_ctrl = switch.get_control_endpoint();
 
     let jh_switch = tokio::spawn(async move {
         switch.poll_with_graceful(shut_rx.recv().map(|_| ())).await;
     });
 
-    let mut service = DiskApiService::new();
-    service.attach_bus(local_ep);
+    let service = DiskApiService::new(switch_ctrl);
     let service = service.service();
     let mut shut_rx = shut_tx.subscribe();
     let jh_server = tokio::spawn(async move {
@@ -66,10 +64,10 @@ async fn test_grpc_disk_server() {
     time::sleep(Duration::from_millis(5)).await;
 
     let jh_disk_enumerator = tokio::spawn(async move {
-        let (tx, mut rx) = target_dp.split();
-        let data = assert_ok!(rx.recv_data().await);
+        let (tx, mut rx) = target_ep.split();
+        let (data, saddr, _) = assert_ok!(rx.recv_data_addr().await);
         let msg = format!("echo - {:?}", data);
-        tx.send(local_addr.clone(), DiskBusData{ msg });
+        tx.send(saddr, DiskBusData{ msg });
     });
 
     let client = DiskClient::connect(format!("http://{}", addr_str)).await;
