@@ -39,6 +39,7 @@ pub struct BusRx {
 
 impl BusRx {
     pub async fn recv_data_timeout(&mut self, timeout: Duration) -> Result<BusData, EndpointError> {
+        println!("qqqqqqqooooooo");
         self.inner.recv_data_timeout(timeout).await
     }
 }

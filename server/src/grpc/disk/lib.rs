@@ -1,21 +1,22 @@
 use std::sync::Arc;
 
-use grpc_api::disk_server::{Disk, DiskServer};
-use grpc_api::{ListReply, ListRequest};
+use crate::grpc::grpc_api::disk_server::{Disk, DiskServer};
+use crate::grpc::grpc_api::{ListReply, ListRequest, WatchReply, WatchRequest};
+use tokio::runtime::Handle;
 use tokio::time::Duration;
 use tonic::{Request, Response, Status};
+use tokio_stream::wrappers::ReceiverStream;
 use tokio::sync::Mutex;
+use tokio::runtime::Runtime;
+use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::bus_types::{BusSwtichCtrl, BusEndpoint, BusData};
 
+use super::stream::DiskWatchStream;
 use super::super::error::{GrpcResult, GrpcError};
 
 use bus::address::Address;
-
-mod grpc_api {
-    tonic::include_proto!("grpc_api"); // The string specified here must match the proto package name
-}
 
 #[derive(Debug, Clone)]
 pub struct DiskBusData {
@@ -24,13 +25,21 @@ pub struct DiskBusData {
 
 #[derive(Debug)]
 pub struct DiskApiService {
-    switch_ctrl: Arc<Mutex<BusSwtichCtrl>>
+    switch_ctrl: Arc<Mutex<BusSwtichCtrl>>,
+    watch_endpoint: BusEndpoint,
 }
 
 impl DiskApiService {
-    pub fn new(switch_ctrl: BusSwtichCtrl) -> Self {
+    pub async fn new(mut switch_ctrl: BusSwtichCtrl) -> Self {
+        let new_endpoint = switch_ctrl.add_endpoint(Address::new("grpc_disk_watch")).await;
+        let watch_endpoint = match new_endpoint {
+            Ok(ep) => ep,
+            Err(_e) => panic!("create disk api service failed"),
+        };
+
         Self {
             switch_ctrl: Arc::new(Mutex::new(switch_ctrl)),
+            watch_endpoint,
         }
     }
 
@@ -75,4 +84,52 @@ impl Disk for DiskApiService {
         };
         Ok(Response::new(reply))
     }
+
+    /*
+    type WatchStream = ReceiverStream<Result<WatchReply, Status>>;
+
+    async fn watch(&self, _request: Request<WatchRequest>) -> Result<Response<Self::WatchStream>, Status> {
+        let (tx, rx) = mpsc::channel::<Result<WatchReply, Status>>(4);
+
+        tokio::spawn(async move {
+            let replys = vec![WatchReply{ timestamp: String::from("heeeeello") }];
+            for reply in replys {
+                tx.send(Ok(reply)).await.unwrap();
+            }
+
+            println!(" /// done sending");
+        });
+
+        Ok(Response::new(ReceiverStream::new(rx)))
+        // Err(Status::internal("eeeeeee"))
+    }
+    */
+
+
+
+
+
+    // /*
+    type WatchStream = DiskWatchStream;
+
+    async fn watch(&self, _request: Request<WatchRequest>) -> Result<Response<Self::WatchStream>, Status> {
+        println!("fffnnnnnnnnnn");
+        let that_addr = Address::new("disk_enumerator");
+        let disk_watch_endpoint = self.watch_endpoint.clone();
+        let (tx, rx) = disk_watch_endpoint.split();
+
+
+        tx.send(that_addr, BusData::GrpcDisk(DiskBusData{
+            msg: format!("request request {:?}", "sdfs"),
+        }));
+
+        let disk_watch_stream = DiskWatchStream::new(rx);
+
+        println!("poopopoopopopopoopopo");
+
+        Ok(Response::new(disk_watch_stream))
+    }
+    // */
 }
+
+

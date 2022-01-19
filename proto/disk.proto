@@ -6,6 +6,7 @@ package grpc_api;
 
 service Disk {
   rpc List(ListRequest) returns (ListReply) {}
+  rpc Watch(WatchRequest) returns (stream WatchReply) {}
 }
 
 message ListRequest {
@@ -13,5 +14,13 @@ message ListRequest {
 }
 
 message ListReply {
+  string timestamp = 1;
+}
+
+message WatchRequest {
+  string timestamp = 1;
+}
+
+message WatchReply {
   string timestamp = 1;
 }

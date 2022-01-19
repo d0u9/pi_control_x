@@ -21,7 +21,7 @@ mod grpc_api {
 }
 
 use grpc_api::disk_client::DiskClient;
-use grpc_api::ListRequest;
+use grpc_api::{ListRequest, WatchRequest};
 
 fn create_bus<T: Clone + Debug>(target_addr: Address) -> (Switch<T>, Endpoint<T>) {
     let (ep0, ep1) = Wire::endpoints::<T>();
@@ -36,7 +36,7 @@ fn create_bus<T: Clone + Debug>(target_addr: Address) -> (Switch<T>, Endpoint<T>
 }
 
 #[test(tokio::test)]
-async fn test_grpc_disk_server() {
+async fn test_grpc_list_disk_server() {
     let addr_str = "[::1]:50051";
     let addr = assert_ok!(addr_str.parse());
 
@@ -52,7 +52,7 @@ async fn test_grpc_disk_server() {
     });
 
     let service = DiskApiService::new(switch_ctrl);
-    let service = service.service();
+    let service = service.await.service();
     let mut shut_rx = shut_tx.subscribe();
     let jh_server = tokio::spawn(async move {
         assert_ok!(Server::builder()
@@ -79,6 +79,70 @@ async fn test_grpc_disk_server() {
 
     let reps = assert_ok!(client.list(rqst).await);
     println!("xxxxxxxxxxxxxxxxx {:?}", reps);
+
+    assert_ok!(shut_tx.send(()));
+
+    assert_ok!(jh_server.await);
+    assert_ok!(jh_switch.await);
+    assert_ok!(jh_disk_enumerator.await);
+}
+
+#[test(tokio::test)]
+async fn test_grpc_watch_disk_server() {
+    let addr_str = "[::1]:50051";
+    let addr = assert_ok!(addr_str.parse());
+
+    let (shut_tx, mut shut_rx) = broadcast::channel::<()>(1);
+
+    let target_addr = Address::new("disk_enumerator");
+
+    let (mut switch, target_ep) = create_bus::<BusData>(target_addr.clone());
+    let switch_ctrl = BusSwtichCtrl::new(switch.get_control_endpoint());
+
+    let jh_switch = tokio::spawn(async move {
+        switch.poll_with_graceful(shut_rx.recv().map(|_| ())).await;
+    });
+
+    time::sleep(Duration::from_millis(5)).await;
+
+    let service = DiskApiService::new(switch_ctrl).await;
+    let service = service.service();
+    let mut shut_rx = shut_tx.subscribe();
+    let jh_server = tokio::spawn(async move {
+        assert_ok!(Server::builder()
+                   .add_service(service)
+                   .serve_with_shutdown(addr, shut_rx.recv().map(|_|()))
+                   .await);
+    });
+
+    time::sleep(Duration::from_millis(5)).await;
+
+
+
+    let jh_disk_enumerator = tokio::spawn(async move {
+        let (tx, mut rx) = target_ep.split();
+        let (data, saddr, _) = assert_ok!(rx.recv_data_addr().await);
+        let msg = format!("echo - {:?}", data);
+        tx.send(saddr.clone(), BusData::GrpcDisk(DiskBusData{ msg: msg.clone() }));
+        time::sleep(Duration::from_millis(5)).await;
+        tx.send(saddr.clone(), BusData::GrpcDisk(DiskBusData{ msg: msg.clone() }));
+        time::sleep(Duration::from_millis(5)).await;
+        tx.send(saddr, BusData::GrpcDisk(DiskBusData{ msg }));
+    });
+
+    let client = DiskClient::connect(format!("http://{}", addr_str)).await;
+    let mut client = assert_ok!(client);
+
+    let rqst = tonic::Request::new(WatchRequest {
+        timestamp: "11111".to_string(),
+    });
+
+    let reps = assert_ok!(client.watch(rqst).await);
+    let mut stream = reps.into_inner();
+    println!("hjhjhjhjhjhjhjhjhjh");
+    while let Some(data) = stream.message().await.unwrap() {
+        println!("Vvvvvvvvvvvv {:?}", data);
+    }
 
     assert_ok!(shut_tx.send(()));
 
