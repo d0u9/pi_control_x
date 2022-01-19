@@ -14,6 +14,7 @@ use bus::switch::Switch;
 use bus::wire::Endpoint;
 
 use super::lib::*;
+use crate::bus_types::*;
 
 mod grpc_api {
     tonic::include_proto!("grpc_api"); // The string specified here must match the proto package name
@@ -43,8 +44,8 @@ async fn test_grpc_disk_server() {
 
     let target_addr = Address::new("disk_enumerator");
 
-    let (mut switch, target_ep) = create_bus::<DiskBusData>(target_addr.clone());
-    let switch_ctrl = switch.get_control_endpoint();
+    let (mut switch, target_ep) = create_bus::<BusData>(target_addr.clone());
+    let switch_ctrl = BusSwtichCtrl::new(switch.get_control_endpoint());
 
     let jh_switch = tokio::spawn(async move {
         switch.poll_with_graceful(shut_rx.recv().map(|_| ())).await;
@@ -66,7 +67,7 @@ async fn test_grpc_disk_server() {
         let (tx, mut rx) = target_ep.split();
         let (data, saddr, _) = assert_ok!(rx.recv_data_addr().await);
         let msg = format!("echo - {:?}", data);
-        tx.send(saddr, DiskBusData{ msg });
+        tx.send(saddr, BusData::GrpcDisk(DiskBusData{ msg }));
     });
 
     let client = DiskClient::connect(format!("http://{}", addr_str)).await;

@@ -7,11 +7,11 @@ use tonic::{Request, Response, Status};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+use crate::bus_types::{BusSwtichCtrl, BusEndpoint, BusData};
+
 use super::super::error::{GrpcResult, GrpcError};
 
-use bus::wire::Endpoint;
 use bus::address::Address;
-use bus::switch::SwitchCtrl;
 
 mod grpc_api {
     tonic::include_proto!("grpc_api"); // The string specified here must match the proto package name
@@ -24,11 +24,11 @@ pub struct DiskBusData {
 
 #[derive(Debug)]
 pub struct DiskApiService {
-    switch_ctrl: Arc<Mutex<SwitchCtrl<DiskBusData>>>
+    switch_ctrl: Arc<Mutex<BusSwtichCtrl>>
 }
 
 impl DiskApiService {
-    pub fn new(switch_ctrl: SwitchCtrl<DiskBusData>) -> Self {
+    pub fn new(switch_ctrl: BusSwtichCtrl) -> Self {
         Self {
             switch_ctrl: Arc::new(Mutex::new(switch_ctrl)),
         }
@@ -38,7 +38,7 @@ impl DiskApiService {
         DiskServer::new(self)
     }
 
-    pub async fn new_endpoint(&self, this_addr: Address) -> GrpcResult<Endpoint<DiskBusData>> {
+    pub async fn new_endpoint(&self, this_addr: Address) -> GrpcResult<BusEndpoint> {
         let mut switch_ctrl_lock = self.switch_ctrl.lock().await;
         match switch_ctrl_lock.add_endpoint(this_addr).await {
             Ok(ep) => Ok(ep),
@@ -56,13 +56,18 @@ impl Disk for DiskApiService {
         let endpoint = self.new_endpoint(this_addr).await?;
 
         let (tx, mut rx) = endpoint.split();
-        tx.send(that_addr, DiskBusData{
+        tx.send(that_addr, BusData::GrpcDisk(DiskBusData{
             msg: format!("request request {:?}", request.into_inner()),
-        });
+        }));
 
         let data = rx.recv_data_timeout(Duration::from_secs(3)).await.map_err(|e| {
             GrpcError::bus_err(e)
         })?;
+
+        let data = match data {
+            BusData::GrpcDisk(data) => data,
+            _ => { return Err(Status::internal("data not match")); },
+        };
 
         let reply = ListReply {
             // timestamp: format!("reply: {}", request.timestamp),
