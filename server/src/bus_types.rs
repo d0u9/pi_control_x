@@ -1,9 +1,13 @@
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
+use futures::{Stream, StreamExt};
 use tokio::time::Duration;
 
 pub use bus::switch::SwitchError;
 pub use bus::wire::EndpointError;
 use bus::wire::Endpoint;
-use bus::wire::{Tx, Rx};
+use bus::wire::{Tx, Rx, RxStream};
 use bus::switch::SwitchCtrl;
 use bus::address::Address;
 
@@ -39,8 +43,31 @@ pub struct BusRx {
 
 impl BusRx {
     pub async fn recv_data_timeout(&mut self, timeout: Duration) -> Result<BusData, EndpointError> {
-        println!("qqqqqqqooooooo");
         self.inner.recv_data_timeout(timeout).await
+    }
+}
+
+pub struct BusRxStream {
+    inner: RxStream<BusData>,
+}
+
+impl BusRxStream {
+    pub fn new(rx: BusRx) -> Self {
+        Self{ inner: RxStream::new(rx.inner) }
+    }
+}
+
+impl Stream for BusRxStream {
+    type Item = Result<(BusData, Address, Address), EndpointError>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        match self.inner.poll_next_unpin(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Some(v)) => {
+                Poll::Ready(Some(v))
+            }
+            _ => Poll::Ready(None)
+        }
     }
 }
 

@@ -1,6 +1,7 @@
 use std::time::Duration;
 use std::fmt::Debug;
 
+use futures::stream::StreamExt;
 use futures::future::FutureExt;
 use tonic::transport::Server;
 use tokio::time;
@@ -139,15 +140,21 @@ async fn test_grpc_watch_disk_server() {
 
     let reps = assert_ok!(client.watch(rqst).await);
     let mut stream = reps.into_inner();
-    println!("hjhjhjhjhjhjhjhjhjh");
-    while let Some(data) = stream.message().await.unwrap() {
-        println!("Vvvvvvvvvvvv {:?}", data);
+
+    for _i in 0 .. 3 {
+        if let Some(data) = stream.message().await.unwrap() {
+            println!("Vvvvvvvvvvvv {:?}", data);
+        }
     }
+    println!("opopopopop");
 
     assert_ok!(shut_tx.send(()));
 
+    println!("opopopopop 2");
     assert_ok!(jh_server.await);
+    println!("opopopopop 3");
     assert_ok!(jh_switch.await);
+    println!("opopopopop 4");
     assert_ok!(jh_disk_enumerator.await);
 }
 

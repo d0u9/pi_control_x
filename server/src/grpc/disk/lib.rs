@@ -2,13 +2,9 @@ use std::sync::Arc;
 
 use crate::grpc::grpc_api::disk_server::{Disk, DiskServer};
 use crate::grpc::grpc_api::{ListReply, ListRequest, WatchReply, WatchRequest};
-use tokio::runtime::Handle;
 use tokio::time::Duration;
 use tonic::{Request, Response, Status};
-use tokio_stream::wrappers::ReceiverStream;
 use tokio::sync::Mutex;
-use tokio::runtime::Runtime;
-use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::bus_types::{BusSwtichCtrl, BusEndpoint, BusData};
@@ -113,7 +109,6 @@ impl Disk for DiskApiService {
     type WatchStream = DiskWatchStream;
 
     async fn watch(&self, _request: Request<WatchRequest>) -> Result<Response<Self::WatchStream>, Status> {
-        println!("fffnnnnnnnnnn");
         let that_addr = Address::new("disk_enumerator");
         let disk_watch_endpoint = self.watch_endpoint.clone();
         let (tx, rx) = disk_watch_endpoint.split();
@@ -124,8 +119,6 @@ impl Disk for DiskApiService {
         }));
 
         let disk_watch_stream = DiskWatchStream::new(rx);
-
-        println!("poopopoopopopopoopopo");
 
         Ok(Response::new(disk_watch_stream))
     }
