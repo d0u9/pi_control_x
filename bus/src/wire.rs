@@ -1,16 +1,21 @@
-#![cfg_attr(test, allow(dead_code))]
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use std::fmt::Debug;
 
+use futures::StreamExt;
 use log::trace;
 use tokio::time::{self, Duration};
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
+use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::Stream;
 
 use super::address::Address;
 use super::packet::Packet;
 use super::types::DevId;
 
 type RawRx<T> = broadcast::Receiver<T>;
+type RawRxStream<T> = BroadcastStream<T>;
 type RawTx<T> = broadcast::Sender<T>;
 
 #[derive(Debug)]
@@ -91,6 +96,53 @@ impl<T: Debug + Clone> Rx<T> {
 
     pub fn peer_id(&self) -> DevId {
         self.peer
+    }
+}
+
+pub struct RxStream<T> {
+    wire: DevId,
+    peer: DevId,
+    rx_stream: RawRxStream<Packet<T>>,
+}
+
+impl<T: 'static + Debug + Clone + Send> RxStream<T>
+{
+    pub fn new(rx: Rx<T>) -> Self {
+        Self {
+            wire: rx.wire,
+            peer: rx.peer,
+            rx_stream: RawRxStream::new(rx.rx),
+        }
+    }
+
+    pub fn wire_id(&self) -> DevId {
+        self.wire
+    }
+}
+
+impl<T: 'static + Debug + Clone + Send> Stream for RxStream<T> {
+    type Item = Result<(T, Address, Address), EndpointError>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        match self.rx_stream.poll_next_unpin(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Some(result)) => {
+                match result {
+                    Ok(pkt) => {
+                        let saddr = pkt.get_saddr().ok_or(EndpointError::AddressError)?;
+                        let daddr = pkt.get_daddr();
+                        let val = pkt.into_val();
+                        let poll_result = Ok((val, saddr, daddr));
+                        Poll::Ready(Some(poll_result))
+                    }
+                    Err(e) => {
+                        trace!("[RxStream({})] Has lagged {} packets, retry", self.peer, e);
+                        Poll::Pending
+                    }
+                }
+            }
+            _ => Poll::Ready(None),
+        }
     }
 }
 
