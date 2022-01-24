@@ -11,14 +11,16 @@ use tokyo_bus::address::Address;
 use tokyo_bus::packet_endpoint::{PktEndpoint, PktWire};
 use tokyo_bus::switch::{Switch, SwitchHandler, SwitchServer};
 
-use super::lib::*;
-use crate::bus_types::*;
 mod grpc_api {
     tonic::include_proto!("grpc_api"); // The string specified here must match the proto package name
 }
 
 use grpc_api::disk_client::DiskClient;
 use grpc_api::{ListRequest, WatchRequest};
+
+use super::lib::*;
+use crate::address_book::AddrBook;
+use crate::bus_types::*;
 
 fn create_bus<T: Clone + Debug>(
     addr: Address,
@@ -40,7 +42,7 @@ async fn test_grpc_disk_list_server() {
     let addr_str = "[::1]:50051";
     let addr = assert_ok!(addr_str.parse());
 
-    let disk_enumerator_addr = Address::new("disk_enumerator");
+    let disk_enumerator_addr = AddrBook::disk_enumerator();
     let (switch_server, switch_handler, target_ep) =
         create_bus::<BusData>(disk_enumerator_addr.clone(), "list_disk_server");
 
@@ -95,7 +97,7 @@ async fn test_grpc_disk_watch_server() {
     let addr_str = "[::1]:50052";
     let addr = assert_ok!(addr_str.parse());
 
-    let disk_enumerator_addr = Address::new("disk_enumerator");
+    let disk_enumerator_addr = AddrBook::disk_enumerator();
     let (switch_server, switch_handler, target_ep) =
         create_bus::<BusData>(disk_enumerator_addr.clone(), "list_disk_server");
 
@@ -128,7 +130,7 @@ async fn test_grpc_disk_watch_server() {
             })
         ));
 
-        let disk_watch_addr = Address::new("grpc-disk-watch");
+        let disk_watch_addr = AddrBook::grpc_disk_watch();
         time::sleep(Duration::from_millis(5)).await;
         assert_ok!(tx.send_data(
             &disk_watch_addr,

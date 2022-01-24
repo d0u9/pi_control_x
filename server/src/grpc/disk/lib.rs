@@ -12,6 +12,7 @@ use crate::grpc::grpc_api::{
 };
 use tonic::{Request, Response, Status};
 
+use crate::address_book::AddrBook;
 use crate::bus_types::SwitchCtrl;
 use crate::bus_types::{BusData, BusEndpoint, BusRx, BusTx};
 
@@ -49,7 +50,7 @@ impl GrpcDiskApiService {
     }
 
     pub async fn service(mut self) -> GrpcResult<ApiDiskServer<Self>> {
-        let disk_watch_endpoint = self.new_endpoint(&Address::new("grpc-disk-watch")).await?;
+        let disk_watch_endpoint = self.new_endpoint(&AddrBook::grpc_disk_watch()).await?;
         self.disk_watch_endpoint = Some(disk_watch_endpoint);
         Ok(ApiDiskServer::new(self))
     }
@@ -75,7 +76,7 @@ impl GrpcDiskApiService {
         rx: &mut BusRx,
         request: &str,
     ) -> Result<GrpcDiskData, Status> {
-        let that_addr = Address::new("disk_enumerator");
+        let that_addr = AddrBook::disk_enumerator();
 
         let request = BusData::GrpcDisk(GrpcDiskData {
             msg: format!("request request {:?}", request),
@@ -112,6 +113,9 @@ impl ApiDisk for GrpcDiskApiService {
 
         Ok(Response::new(reply))
     }
+
+
+
 
     type WatchStream = ReceiverStream<Result<ApiWatchReply, Status>>;
 
