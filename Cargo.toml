@@ -1,2 +1,2 @@
 [workspace]
-members = ["bus", "kernel", "server", "client"]
+members = ["kernel", "server", "client"]

@@ -1,104 +1,140 @@
+use std::convert::From;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use futures::{Stream, StreamExt};
-use tokio::time::Duration;
+use futures::StreamExt;
+use tokio_stream::Stream;
 
-pub use bus::switch::SwitchError;
-pub use bus::wire::EndpointError;
-use bus::wire::Endpoint;
-use bus::wire::{Tx, Rx, RxStream};
-use bus::switch::SwitchCtrl;
-use bus::address::Address;
+use tokyo_bus::address::Address;
+use tokyo_bus::packet_endpoint::{
+    PktEndpoint, PktEndpointErrKind, PktEndpointError, PktRx, PktRxStream, PktTx,
+};
+use tokyo_bus::switch::{SwitchErrKind, SwitchError, SwitchHandler};
 
-use crate::grpc::disk::DiskBusData;
+use crate::grpc::lib::GrpcDiskData;
 
-#[derive(Clone, Debug)]
-pub enum BusData {
-    GrpcDisk(DiskBusData),
-    UNSPEC,
+#[derive(Debug, Clone, Copy)]
+pub enum BusErrKind {
+    SwitchErr(SwitchErrKind),
+    PktEndpointErr(PktEndpointErrKind),
 }
 
-impl BusData {
-    pub fn grpc_disk(data: DiskBusData) -> Self {
-        Self::GrpcDisk(data)
+#[derive(Debug, Clone)]
+pub struct BusError {
+    kind: BusErrKind,
+    msg: String,
+}
+
+impl BusError {
+    pub fn err_kind(&self) -> BusErrKind {
+        self.kind
+    }
+
+    pub fn err_msg(&self) -> &str {
+        &self.msg
+    }
+}
+
+impl From<SwitchError> for BusError {
+    fn from(err: SwitchError) -> Self {
+        Self {
+            kind: BusErrKind::SwitchErr(err.err_kind()),
+            msg: format!("Switch Err: {:?}", err.err_msg()),
+        }
+    }
+}
+
+impl From<PktEndpointError> for BusError {
+    fn from(err: PktEndpointError) -> Self {
+        Self {
+            kind: BusErrKind::PktEndpointErr(err.err_kind()),
+            msg: format!("Switch Err: {:?}", err.err_msg()),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SwitchCtrl {
+    inner: SwitchHandler<BusData>,
+}
+
+impl SwitchCtrl {
+    pub fn new(switch_handler: SwitchHandler<BusData>) -> Self {
+        Self {
+            inner: switch_handler,
+        }
+    }
+
+    pub async fn new_endpoint(&self, addr: &Address) -> Result<BusEndpoint, BusError> {
+        let inner = self.inner.new_endpoint(addr.to_owned()).await?;
+        Ok(BusEndpoint { inner })
     }
 }
 
 #[derive(Debug)]
 pub struct BusTx {
-    inner: Tx<BusData>,
+    inner: PktTx<BusData>,
 }
 
 impl BusTx {
-    pub fn send(&self, that_addr: Address, data: BusData) {
-        self.inner.send(that_addr, data)
+    pub fn send(&self, addr: &Address, val: BusData) -> Result<(), BusError> {
+        let _ = self.inner.send_data(addr, val)?;
+        Ok(())
     }
 }
 
 #[derive(Debug)]
 pub struct BusRx {
-    inner: Rx<BusData>,
+    inner: PktRx<BusData>,
 }
 
 impl BusRx {
-    pub async fn recv_data_timeout(&mut self, timeout: Duration) -> Result<BusData, EndpointError> {
-        self.inner.recv_data_timeout(timeout).await
+    pub async fn recv(&mut self) -> Result<(BusData, Address, Address), BusError> {
+        let val = self.inner.recv_tuple().await?;
+        Ok(val)
     }
 }
 
+#[derive(Debug)]
 pub struct BusRxStream {
-    inner: RxStream<BusData>,
+    inner: PktRxStream<BusData>,
 }
 
 impl BusRxStream {
     pub fn new(rx: BusRx) -> Self {
-        Self{ inner: RxStream::new(rx.inner) }
-    }
-}
-
-impl Stream for BusRxStream {
-    type Item = Result<(BusData, Address, Address), EndpointError>;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        match self.inner.poll_next_unpin(cx) {
-            Poll::Pending => Poll::Pending,
-            Poll::Ready(Some(v)) => {
-                Poll::Ready(Some(v))
-            }
-            _ => Poll::Ready(None)
+        Self {
+            inner: PktRxStream::new(rx.inner),
         }
     }
 }
 
-#[derive(Clone, Debug)]
+impl Stream for BusRxStream {
+    type Item = Result<(BusData, Address, Address), BusError>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        match self.inner.poll_next_unpin(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Some(Ok(pkt))) => Poll::Ready(Some(Ok(pkt.into_tuple()))),
+            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e.into()))),
+            Poll::Ready(None) => Poll::Ready(None),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct BusEndpoint {
-    inner: Endpoint<BusData>,
+    inner: PktEndpoint<BusData>,
 }
 
 impl BusEndpoint {
-    pub fn split(self) -> (BusTx, BusRx) {
-        let (tx, rx) = self.inner.split();
-        (BusTx{inner: tx}, BusRx{inner: rx})
+    pub fn split(self) -> Result<(BusTx, BusRx), BusError> {
+        let (tx, rx) = self.inner.split()?;
+        Ok((BusTx { inner: tx }, BusRx { inner: rx }))
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct BusSwtichCtrl {
-    inner: SwitchCtrl<BusData>,
+#[derive(Debug, Clone)]
+pub enum BusData {
+    GrpcDisk(GrpcDiskData),
+    Unspec,
 }
-
-impl BusSwtichCtrl {
-    pub fn new(inner: SwitchCtrl<BusData>) -> Self {
-        Self{ inner }
-    }
-
-    pub async fn add_endpoint(&mut self, this_addr: Address) -> Result<BusEndpoint, SwitchError> {
-        let ep = self.inner.add_endpoint(this_addr).await?;
-        Ok(BusEndpoint {
-            inner: ep,
-        })
-    }
-}
-
-

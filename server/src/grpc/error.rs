@@ -3,6 +3,8 @@ use std::fmt::Debug;
 
 use tonic::Status;
 
+use crate::bus_types::BusError;
+
 pub type GrpcResult<T> = Result<T, GrpcError>;
 
 #[derive(Debug, Clone, Copy)]
@@ -18,10 +20,10 @@ pub struct GrpcError {
 }
 
 impl GrpcError {
-    pub fn bus_err(e: impl Debug) -> Self {
+    pub fn internal(msg: &str) -> Self {
         Self {
-            kind: ErrKind::BusError,
-            msg: format!("Bus Error: {:?}", e),
+            kind: ErrKind::InternalError,
+            msg: msg.to_owned(),
         }
     }
 }
@@ -35,3 +37,11 @@ impl From<GrpcError> for Status {
     }
 }
 
+impl From<BusError> for GrpcError {
+    fn from(err: BusError) -> Self {
+        Self {
+            kind: ErrKind::BusError,
+            msg: format!("Bus error: {:?}", err),
+        }
+    }
+}
